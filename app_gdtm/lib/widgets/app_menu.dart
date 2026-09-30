@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:app_gdtm/models/Users.dart';
 import 'package:app_gdtm/widgets/app_colors.dart';
 
 /// Một mục trong menu bên trái.
@@ -14,20 +15,27 @@ class AppMenuItem {
   });
 }
 
-/// Một nhóm menu (có tiêu đề màu vàng).
+/// Một nhóm menu.
 class AppMenuSection {
   final String title;
   final List<AppMenuItem> items;
 
-  const AppMenuSection({required this.title, required this.items});
+  const AppMenuSection({
+    required this.title,
+    required this.items,
+  });
 }
 
-/// Menu bên trái: dùng làm Drawer (di động) hoặc sidebar cố định (laptop).
+/// Menu bên trái: dùng làm Drawer (di động)
+/// hoặc sidebar cố định (laptop).
 class AppMenu extends StatelessWidget {
   final List<AppMenuSection> sections;
   final List<AppMenuItem> footerItems;
   final String selectedId;
   final ValueChanged<String> onSelected;
+
+  // Người dùng đang đăng nhập
+  final Users user;
 
   const AppMenu({
     super.key,
@@ -35,6 +43,7 @@ class AppMenu extends StatelessWidget {
     this.footerItems = const [],
     required this.selectedId,
     required this.onSelected,
+    required this.user,
   });
 
   @override
@@ -47,12 +56,25 @@ class AppMenu extends StatelessWidget {
             // Logo
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Image.asset('lib/assets/ute_logo.png', height: 120),
+              child: Image.asset(
+                'lib/assets/ute_logo.png',
+                height: 120,
+              ),
             ),
-            const Divider(color: Colors.white24, height: 1),
-            // Thông tin sinh viên
-            const _StudentInfo(),
-            const Divider(color: Colors.white24, height: 1),
+
+            const Divider(
+              color: Colors.white24,
+              height: 1,
+            ),
+
+            // Thông tin người dùng đang đăng nhập
+            _StudentInfo(user: user),
+
+            const Divider(
+              color: Colors.white24,
+              height: 1,
+            ),
+
             // Danh sách menu
             Expanded(
               child: ListView(
@@ -60,7 +82,12 @@ class AppMenu extends StatelessWidget {
                 children: [
                   for (final section in sections) ...[
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+                      padding: const EdgeInsets.fromLTRB(
+                        16,
+                        16,
+                        16,
+                        6,
+                      ),
                       child: Text(
                         section.title,
                         style: const TextStyle(
@@ -70,6 +97,7 @@ class AppMenu extends StatelessWidget {
                         ),
                       ),
                     ),
+
                     for (final item in section.items)
                       _MenuTile(
                         item: item,
@@ -80,13 +108,19 @@ class AppMenu extends StatelessWidget {
                 ],
               ),
             ),
-                        const Divider(color: Colors.white24, height: 1),
+
+            const Divider(
+              color: Colors.white24,
+              height: 1,
+            ),
+
             for (final item in footerItems)
               _MenuTile(
                 item: item,
                 selected: item.id == selectedId,
                 onTap: () => onSelected(item.id),
               ),
+
             const SizedBox(height: 8),
           ],
         ),
@@ -96,40 +130,98 @@ class AppMenu extends StatelessWidget {
 }
 
 class _StudentInfo extends StatelessWidget {
-  const _StudentInfo();
+  final Users user;
+
+  const _StudentInfo({
+    required this.user,
+  });
+
+  String _getRoleName(String? role) {
+    switch (role?.toLowerCase()) {
+      case 'student':
+      case 'role_student':
+        return 'Sinh viên';
+
+      case 'teacher':
+      case 'role_teacher':
+        return 'Giảng viên';
+
+      case 'admin':
+      case 'role_admin':
+        return 'Quản trị viên';
+
+      default:
+        return role ?? 'Người dùng';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    final fullName =
+        user.fullName?.trim().isNotEmpty == true
+            ? user.fullName!.trim()
+            : 'Người dùng';
+
+    final roleName = _getRoleName(user.role);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 14,
+      ),
       child: Row(
         children: [
-          CircleAvatar(
+          const CircleAvatar(
             radius: 24,
             backgroundColor: Colors.white,
-            child: Icon(Icons.person, color: AppColors.primary, size: 30),
-            // Có ảnh thật: backgroundImage: NetworkImage(url)
+            child: Icon(
+              Icons.person,
+              color: AppColors.primary,
+              size: 30,
+            ),
           ),
-          SizedBox(width: 12),
+
+          const SizedBox(width: 12),
+
           Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Họ tên
                 Text(
-                  'Võ Thị Mai Quỳnh',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
+                  fullName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 2),
+
+                const SizedBox(height: 3),
+
+                // MSSV / ID
                 Text(
-                  'SV/HV/NCS - 23110147',
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                  user.id ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                  ),
                 ),
+
+                const SizedBox(height: 2),
+
+                // Role
                 Text(
-                  '(Còn học)',
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                  roleName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
@@ -153,7 +245,9 @@ class _MenuTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.menuActive : Colors.white;
+    final color =
+        selected ? AppColors.menuActive : Colors.white;
+
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -171,13 +265,23 @@ class _MenuTile extends StatelessWidget {
                     ? const LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Color(0xFF1A237E), AppColors.menuActive],
+                        colors: [
+                          Color(0xFF1A237E),
+                          AppColors.menuActive,
+                        ],
                       )
                     : null,
               ),
             ),
-            Icon(item.icon, color: color, size: 22),
+
+            Icon(
+              item.icon,
+              color: color,
+              size: 22,
+            ),
+
             const SizedBox(width: 12),
+
             Expanded(
               child: Text(
                 item.title,
@@ -185,7 +289,9 @@ class _MenuTile extends StatelessWidget {
                 style: TextStyle(
                   color: color,
                   fontSize: 15,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                  fontWeight: selected
+                      ? FontWeight.w600
+                      : FontWeight.normal,
                 ),
               ),
             ),

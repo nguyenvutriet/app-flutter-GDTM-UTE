@@ -1,8 +1,17 @@
+import 'package:app_gdtm/firebase_options.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:app_gdtm/pages/common/dashboard_page.dart';
+import 'package:app_gdtm/pages/login/login_page.dart';
 import 'package:app_gdtm/widgets/app_colors.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Khởi tạo Firebase bằng cấu hình trong firebase_options.dart
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   runApp(const MyApp());
 }
 
@@ -14,12 +23,16 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Giải đáp thắc mắc sinh viên',
       debugShowCheckedModeBanner: false,
+
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: AppColors.primary,
+        ),
         useMaterial3: true,
       ),
-      // TODO: khi có login thì đổi thành trang đăng nhập
-      home: const DashboardPage(),
+
+      // Mở app vào trang đăng nhập; đăng nhập xong mới vào DashboardPage theo role
+      home: const LoginPage(),
     );
   }
 }

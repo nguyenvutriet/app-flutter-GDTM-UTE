@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "44251978625",
+    "project_id": "flutter-giai-dap-thac-mac-app",
+    "storage_bucket": "flutter-giai-dap-thac-mac-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:44251978625:android:a3b017166b8faee4c5e680",
+        "android_client_info": {
+          "package_name": "com.example.app_gdtm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDzdHdGeYYN5wVN_9ppr51poVHozqk_Ab0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

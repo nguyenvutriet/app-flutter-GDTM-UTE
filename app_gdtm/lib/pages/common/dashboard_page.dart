@@ -1,22 +1,34 @@
 import 'package:flutter/material.dart';
+
 import 'package:app_gdtm/models/enums/user_role.dart';
+import 'package:app_gdtm/models/Users.dart';
 import 'package:app_gdtm/widgets/app_colors.dart';
 import 'package:app_gdtm/widgets/app_menu.dart';
 import 'package:app_gdtm/widgets/app_shell.dart';
 import 'package:app_gdtm/pages/common/notification_page.dart';
+import 'package:app_gdtm/pages/login/login_page.dart';
 
 /// Trang chủ dashboard: khung (header + menu) dùng chung,
 /// menu và nội dung đổi theo role và mục menu được chọn.
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  /// Role của tài khoản vừa đăng nhập.
+  final UserRole role;
+
+  /// Thông tin người dùng vừa đăng nhập.
+  final Users user;
+
+  const DashboardPage({
+    super.key,
+    required this.role,
+    required this.user,
+  });
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  // TODO: khi có login thì lấy role từ user đăng nhập
-  final UserRole _role = UserRole.student;
+  // Role lấy từ tài khoản đăng nhập (widget.role)
   // final String _userId = '23110147'; // TODO: lấy từ user đăng nhập
 
   String _selectedId = 'notifications';
@@ -31,7 +43,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   /// Menu theo role
   List<AppMenuSection> get _menuSections {
-    switch (_role) {
+    switch (widget.role) {
       case UserRole.student:
         return const [
           AppMenuSection(
@@ -149,7 +161,7 @@ class _DashboardPageState extends State<DashboardPage> {
   /// Nội dung theo role + menu đang chọn.
   /// Thêm trang mới: thêm một `case` với id của menu ở đúng role.
   Widget _buildContent() {
-    switch (_role) {
+    switch (widget.role) {
       case UserRole.student:
         switch (_selectedId) {
           case 'notifications':
@@ -190,7 +202,12 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void _onMenuSelected(String id) {
     if (id == 'logout') {
-      // TODO: xóa token, quay về trang đăng nhập
+      // Quay về trang đăng nhập và xoá toàn bộ lịch sử điều hướng.
+      // TODO: nếu sau này lưu phiên đăng nhập (token/SharedPreferences) thì xoá ở đây.
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+        (route) => false,
+      );
       return;
     }
     setState(() => _selectedId = id);
@@ -200,9 +217,18 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     return AppShell(
       sections: _menuSections,
-      footerItems: const [_logoutItem],
+
+      footerItems: const [
+        _logoutItem,
+      ],
+
       selectedMenuId: _selectedId,
+
       onMenuSelected: _onMenuSelected,
+
+      // Người dùng đang đăng nhập
+      user: widget.user,
+
       child: _buildContent(),
     );
   }
