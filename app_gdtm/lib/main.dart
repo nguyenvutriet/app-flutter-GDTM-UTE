@@ -1,7 +1,7 @@
 import 'package:app_gdtm/firebase_options.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:app_gdtm/pages/common/dashboard_page.dart';
+import 'package:app_gdtm/pages/login/login_page.dart';
 import 'package:app_gdtm/widgets/app_colors.dart';
 
 void main() async {
@@ -31,8 +31,8 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
 
-      // Giữ DashboardPage từ bản GitHub
-      home: const DashboardPage(),
+      // Mở app vào trang đăng nhập; đăng nhập xong mới vào DashboardPage theo role
+      home: const LoginPage(),
     );
   }
 }
