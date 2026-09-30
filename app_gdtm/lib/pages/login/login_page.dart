@@ -93,9 +93,27 @@ class _LoginPageState extends State<LoginPage> {
 
   /// Nút "Đăng nhập với Google" — mới chỉ có giao diện.
   /// TODO(google-signin): xem HUONG_DAN_GOOGLE_SIGN_IN.md để cài đặt thật.
-  void _onGoogleSignIn() {
-    _showInfo('Chức năng đăng nhập Google đang được phát triển.');
+  Future<void> _onGoogleSignIn() async {
+  if (_loading) return;
+  setState(() {
+    _loading = true;
+    _errorMessage = null;
+  });
+
+  try {
+    final result = await _authService.signInWithGoogle();
+    if (!mounted) return;
+    _goToDashboard(result.role);
+  } on AuthException catch (e) {
+    if (!mounted) return;
+    setState(() => _errorMessage = e.message);
+  } catch (_) {
+    if (!mounted) return;
+    setState(() => _errorMessage = 'Đã có lỗi xảy ra, vui lòng thử lại.');
+  } finally {
+    if (mounted) setState(() => _loading = false);
   }
+}
 
   /// Nút "Quên mật khẩu".
   /// TODO(forgot-password): thực thi chức năng quên mật khẩu tại đây
