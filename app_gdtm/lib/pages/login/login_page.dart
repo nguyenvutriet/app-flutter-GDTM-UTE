@@ -103,7 +103,10 @@ class _LoginPageState extends State<LoginPage> {
   try {
     final result = await _authService.signInWithGoogle();
     if (!mounted) return;
-    _goToDashboard(result.role);
+    _goToDashboard(
+     result.role,
+    result.user,
+    );
   } on AuthException catch (e) {
     if (!mounted) return;
     setState(() => _errorMessage = e.message);
