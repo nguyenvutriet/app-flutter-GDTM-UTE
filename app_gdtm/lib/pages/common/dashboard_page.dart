@@ -5,6 +5,7 @@ import 'package:app_gdtm/widgets/app_menu.dart';
 import 'package:app_gdtm/widgets/app_shell.dart';
 import 'package:app_gdtm/pages/common/notification_page.dart';
 import 'package:app_gdtm/pages/login/login_page.dart';
+import 'package:app_gdtm/services/AuthService.dart';
 
 /// Trang chủ dashboard: khung (header + menu) dùng chung,
 /// menu và nội dung đổi theo role và mục menu được chọn.
@@ -195,6 +196,7 @@ class _DashboardPageState extends State<DashboardPage> {
     if (id == 'logout') {
       // Quay về trang đăng nhập và xoá toàn bộ lịch sử điều hướng.
       // TODO: nếu sau này lưu phiên đăng nhập (token/SharedPreferences) thì xoá ở đây.
+      AuthService().signOut();
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginPage()),
         (route) => false,
