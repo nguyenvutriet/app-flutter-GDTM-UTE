@@ -8,6 +8,8 @@ import 'package:app_gdtm/widgets/app_shell.dart';
 import 'package:app_gdtm/pages/common/notification_page.dart';
 import 'package:app_gdtm/pages/login/login_page.dart';
 import 'package:app_gdtm/services/AuthService.dart';
+import 'package:app_gdtm/pages/student/send_feedback_page.dart';
+
 
 /// Trang chủ dashboard: khung (header + menu) dùng chung,
 /// menu và nội dung đổi theo role và mục menu được chọn.
@@ -167,6 +169,12 @@ class _DashboardPageState extends State<DashboardPage> {
         switch (_selectedId) {
           case 'notifications':
             return const NotificationPage();
+          case 'send_feedback':
+            return SendFeedbackPage(
+              user: widget.user,
+              // Gửi xong thì chuyển sang "Lịch sử góp ý" (khi trang đó làm xong)
+              onSubmitted: () => setState(() => _selectedId = 'feedback_history'),
+            );
           // TODO: case 'send_feedback': return const SendFeedbackPage();
           default:
             return _PlaceholderPage(title: _titleOf(_selectedId));
