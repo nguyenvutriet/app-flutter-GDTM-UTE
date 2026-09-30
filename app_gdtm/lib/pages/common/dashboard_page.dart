@@ -16,7 +16,7 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   // TODO: khi có login thì lấy role từ user đăng nhập
-  final UserRole _role = UserRole.staff;
+  final UserRole _role = UserRole.student;
   // final String _userId = '23110147'; // TODO: lấy từ user đăng nhập
 
   String _selectedId = 'notifications';
