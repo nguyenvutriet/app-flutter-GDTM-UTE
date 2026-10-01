@@ -11,6 +11,7 @@ class CommentTile extends StatelessWidget {
   final void Function(CommentDTO comment, String type) onReact;
   final ValueChanged<CommentDTO> onReply;
   final ValueChanged<CommentDTO> onDelete;
+  final ValueChanged<CommentDTO>? onShowReactors;
 
   const CommentTile({
     super.key,
@@ -18,6 +19,7 @@ class CommentTile extends StatelessWidget {
     required this.onReact,
     required this.onReply,
     required this.onDelete,
+    this.onShowReactors,
     this.isReply = false,
   });
 
@@ -27,6 +29,16 @@ class CommentTile extends StatelessWidget {
     // Chỉ hiện @tên khi trả lời một reply (không phải bình luận gốc)
     final showMention =
         c.isReply && c.replyToUsername != null && c.replyId != c.parentId;
+
+    // Admin = đỏ, giảng viên = xanh
+    final Color? roleColor = c.isAdmin
+        ? const Color(0xFFD32F2F)
+        : (c.isTeacher ? kFbBlue : null);
+    final Color bubbleColor = c.isAdmin
+        ? const Color(0xFFFDECEA)
+        : (c.isTeacher ? const Color(0xFFE7F3FF) : kFbBg);
+    final String? roleLabel =
+        c.isAdmin ? 'Quản trị viên' : (c.isTeacher ? 'Giảng viên' : null);
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Padding(
@@ -41,19 +53,36 @@ class CommentTile extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: kFbBg,
+                    color: bubbleColor,
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(mainAxisSize: MainAxisSize.min, children: [
                       Flexible(
                         child: Text(c.userName,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 13)),
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: roleColor)),
                       ),
                       if (c.isVerified) ...[
                         const SizedBox(width: 4),
-                        const Icon(Icons.verified, size: 14, color: kFbBlue),
+                        Icon(Icons.verified, size: 14, color: roleColor ?? kFbBlue),
+                      ],
+                      if (roleLabel != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: roleColor,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(roleLabel,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600)),
+                        ),
                       ],
                     ]),
                     const SizedBox(height: 2),
@@ -105,9 +134,13 @@ class CommentTile extends StatelessWidget {
                                   color: kFbText2)),
                         ),
                       ),
-                    ReactionSummary(
-                      emojis: topReactionEmojis(c.reactions),
-                      total: c.totalReactions,
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onShowReactors == null ? null : () => onShowReactors!(c),
+                      child: ReactionSummary(
+                        emojis: topReactionEmojis(c.reactions),
+                        total: c.totalReactions,
+                      ),
                     ),
                   ],
                 ),
@@ -127,6 +160,7 @@ class CommentTile extends StatelessWidget {
                       onReact: onReact,
                       onReply: onReply,
                       onDelete: onDelete,
+                      onShowReactors: onShowReactors,
                     ))
                 .toList(),
           ),

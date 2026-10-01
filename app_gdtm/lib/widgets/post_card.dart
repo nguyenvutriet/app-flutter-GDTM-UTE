@@ -14,6 +14,9 @@ class PostCard extends StatelessWidget {
   /// Bấm nút "Bình luận" (mặc định = onOpen)
   final VoidCallback? onTapComments;
 
+  /// Bấm vào dòng emoji + số reaction để xem ai đã thả
+  final VoidCallback? onShowReactors;
+
   /// true = hiển thị đầy đủ nội dung (trang chi tiết)
   final bool expanded;
 
@@ -23,6 +26,7 @@ class PostCard extends StatelessWidget {
     required this.onReact,
     this.onOpen,
     this.onTapComments,
+    this.onShowReactors,
     this.expanded = false,
   });
 
@@ -149,7 +153,12 @@ class PostCard extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
             child: Row(children: [
-              ReactionSummary(emojis: post.topReactionIcons, total: post.totalReactions),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onShowReactors ?? onOpen,
+                child: ReactionSummary(
+                    emojis: post.topReactionIcons, total: post.totalReactions),
+              ),
               const Spacer(),
               if (post.commentCount > 0)
                 Text('${post.commentCount} bình luận',

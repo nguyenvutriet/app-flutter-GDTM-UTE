@@ -276,6 +276,40 @@ class ForumService {
     );
   }
 
+  /// Danh sách người đã thả reaction cho bài viết (mới nhất trước).
+  Future<List<ReactorDTO>> getPostReactors(String postId) =>
+      _loadReactors(votesCollection, 'requestId', postId);
+
+  /// Danh sách người đã thả reaction cho bình luận (mới nhất trước).
+  Future<List<ReactorDTO>> getCommentReactors(String commentId) =>
+      _loadReactors(voteCommentsCollection, 'commentId', commentId);
+
+  Future<List<ReactorDTO>> _loadReactors(
+    String collection,
+    String field,
+    String targetId,
+  ) async {
+    _uid; // bắt buộc đăng nhập
+    final snap =
+        await _db.collection(collection).where(field, isEqualTo: targetId).get();
+    final votes = snap.docs.map((d) => d.data()).toList();
+    final users = await _loadUsers(
+        votes.map((v) => v['userId']).whereType<String>().toSet());
+
+    final list = votes.map((v) {
+      final id = v['userId']?.toString() ?? '';
+      return ReactorDTO(
+        userId: id,
+        userName: _userName(users[id]),
+        userRole: _userRole(users[id]),
+        type: (v['reactionType']?.toString() ?? 'LIKE').toUpperCase(),
+        date: (v['voteAt'] as Timestamp?)?.toDate(),
+      );
+    }).toList();
+    list.sort((a, b) => _cmpDate(b.date, a.date));
+    return list;
+  }
+
   // ==================================================================
   // NỘI BỘ
   // ==================================================================
@@ -421,10 +455,21 @@ class ForumService {
       repliesBy.putIfAbsent(c.parentId!, () => []).add(c);
     }
 
+    // Admin (đỏ) → giảng viên (xanh) → còn lại; cùng nhóm thì cũ → mới
+    int byPriority(CommentDTO a, CommentDTO b) {
+      final p = a.rolePriority.compareTo(b.rolePriority);
+      return p != 0 ? p : _cmpDate(a.date, b.date);
+    }
+
+    for (final list in repliesBy.values) {
+      list.sort(byPriority);
+    }
+
     return flat
         .where((c) => !c.isReply)
         .map((c) => c.copyWith(replies: repliesBy[c.id] ?? const []))
-        .toList();
+        .toList()
+      ..sort(byPriority);
   }
 
   // ---------------- Truy vấn theo lô ----------------
