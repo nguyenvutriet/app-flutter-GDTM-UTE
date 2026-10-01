@@ -2,8 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 
 import 'package:app_gdtm/models/Department.dart';
+import 'package:app_gdtm/models/ClarificationConversation.dart';
 import 'package:app_gdtm/models/FileAttachment.dart';
+import 'package:app_gdtm/models/Message.dart';
 import 'package:app_gdtm/models/Request.dart';
+import 'package:app_gdtm/models/RequestStatusHistory.dart';
 import 'package:app_gdtm/models/Users.dart';
 import 'package:app_gdtm/services/CloudinaryService.dart';
 
@@ -23,6 +26,7 @@ class RequestService {
   static const String requestsCollection = 'requests';
   static const String fileAttachmentsCollection = 'fileattachments';
   static const String statusHistoryCollection = 'requeststatushistory';
+  static const String notificationsCollection = 'notification';
 
   /// Trạng thái xử lý ban đầu của góp ý.
   static const String initialStatus = 'PENDING';
@@ -51,7 +55,8 @@ class RequestService {
 
   /// Gửi góp ý:
   ///  1. Upload từng tệp lên Cloudinary.
-  ///  2. Ghi (batch) request + fileAttachments + status history lên Firestore.
+  ///  2. Ghi (batch) request + fileAttachments + status history + notification
+  ///     cho phòng ban lên Firestore.
   ///
   /// Upload trước, ghi Firestore sau để nếu upload lỗi thì không tạo
   /// góp ý "mồ côi". Trả về id góp ý vừa tạo.
@@ -80,8 +85,7 @@ class RequestService {
       final f = files[i];
       final result = await _cloudinary.uploadFile(f);
 
-      final attachRef =
-          _firestore.collection(fileAttachmentsCollection).doc();
+      final attachRef = _firestore.collection(fileAttachmentsCollection).doc();
       attachments.add(
         FileAttachment(
           id: attachRef.id,
@@ -122,15 +126,12 @@ class RequestService {
     });
 
     for (final a in attachments) {
-      batch.set(
-        _firestore.collection(fileAttachmentsCollection).doc(a.id),
-        {
-          ...a.toFirestore(),
-          // Cần public_id nếu sau này muốn xoá/biến đổi file trên Cloudinary.
-          'publicId': publicIds[a.id],
-          'resourceType': resourceTypes[a.id],
-        },
-      );
+      batch.set(_firestore.collection(fileAttachmentsCollection).doc(a.id), {
+        ...a.toFirestore(),
+        // Cần public_id nếu sau này muốn xoá/biến đổi file trên Cloudinary.
+        'publicId': publicIds[a.id],
+        'resourceType': resourceTypes[a.id],
+      });
     }
 
     final historyRef = _firestore.collection(statusHistoryCollection).doc();
@@ -141,8 +142,116 @@ class RequestService {
       'requestId': requestId,
     });
 
+    final notificationRef = _firestore
+        .collection(notificationsCollection)
+        .doc();
+    batch.set(notificationRef, {
+      'id': notificationRef.id,
+      'title': 'Có góp ý mới cần tiếp nhận',
+      'content':
+          '${user.fullName ?? user.id ?? 'Sinh viên'} đã gửi góp ý: ${subject.trim()}',
+      'notificationType': 'NEW_REQUEST',
+      'isRead': false,
+      'createAt': Timestamp.fromDate(now),
+      'departmentId': departmentId,
+      'requestId': requestId,
+      'userId': user.id,
+    });
+
     await batch.commit();
     return requestId;
+  }
+
+  Future<List<Request>> getStudentFeedbackHistory(String userId) async {
+    final snapshot = await _firestore
+        .collection(requestsCollection)
+        .where('userId', isEqualTo: userId)
+        .get();
+
+    final requests = snapshot.docs.map(Request.fromFirestore).toList();
+    requests.sort((a, b) {
+      final aTime = a.timeCreate ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime = b.timeCreate ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bTime.compareTo(aTime);
+    });
+    return requests;
+  }
+
+  Future<FeedbackDetails> getFeedbackDetails(Request request) async {
+    final requestId = request.id;
+    if (requestId == null || requestId.isEmpty) {
+      return const FeedbackDetails();
+    }
+
+    final results = await Future.wait([
+      _firestore
+          .collection(statusHistoryCollection)
+          .where('requestId', isEqualTo: requestId)
+          .get(),
+      _firestore
+          .collection(fileAttachmentsCollection)
+          .where('requestId', isEqualTo: requestId)
+          .get(),
+      _firestore
+          .collection('clarificationconversation')
+          .where('requestId', isEqualTo: requestId)
+          .get(),
+    ]);
+
+    final histories =
+        (results[0] as QuerySnapshot).docs
+            .map(RequestStatusHistory.fromFirestore)
+            .toList()
+          ..sort(
+            (a, b) => (a.createAt ?? DateTime(0)).compareTo(
+              b.createAt ?? DateTime(0),
+            ),
+          );
+    final attachments = (results[1] as QuerySnapshot).docs
+        .map(FileAttachment.fromFirestore)
+        .toList();
+    final conversations =
+        (results[2] as QuerySnapshot).docs
+            .map(ClarificationConversation.fromFirestore)
+            .toList()
+          ..sort(
+            (a, b) => (b.createAt ?? DateTime(0)).compareTo(
+              a.createAt ?? DateTime(0),
+            ),
+          );
+
+    final conversationsWithMessages = await Future.wait(
+      conversations.map((conversation) async {
+        final conversationId = conversation.id;
+        if (conversationId == null || conversationId.isEmpty) {
+          return conversation;
+        }
+        final messages = await _firestore
+            .collection('message')
+            .where('clarificationConversationId', isEqualTo: conversationId)
+            .get();
+        final ordered = messages.docs.map(Message.fromFirestore).toList()
+          ..sort(
+            (a, b) => (a.createAt ?? DateTime(0)).compareTo(
+              b.createAt ?? DateTime(0),
+            ),
+          );
+        return ClarificationConversation(
+          id: conversation.id,
+          isOpen: conversation.isOpen,
+          subject: conversation.subject,
+          createAt: conversation.createAt,
+          requestId: conversation.requestId,
+          messages: ordered,
+        );
+      }),
+    );
+
+    return FeedbackDetails(
+      histories: histories,
+      attachments: attachments,
+      conversations: conversationsWithMessages,
+    );
   }
 
   String _extensionOf(String name) {
@@ -150,4 +259,16 @@ class RequestService {
     if (dot < 0 || dot == name.length - 1) return '';
     return name.substring(dot + 1).toLowerCase();
   }
+}
+
+class FeedbackDetails {
+  final List<RequestStatusHistory> histories;
+  final List<FileAttachment> attachments;
+  final List<ClarificationConversation> conversations;
+
+  const FeedbackDetails({
+    this.histories = const [],
+    this.attachments = const [],
+    this.conversations = const [],
+  });
 }

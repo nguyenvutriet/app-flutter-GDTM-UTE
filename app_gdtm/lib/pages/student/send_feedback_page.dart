@@ -199,10 +199,23 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
 
       if (!mounted) return;
       _reset();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gửi góp ý thành công!')),
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Gửi góp ý thành công'),
+          content: const Text(
+            'Góp ý đã được gửi đến phòng ban. Bạn có thể theo dõi tiến độ trong lịch sử góp ý.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
       );
-      widget.onSubmitted?.call();
+      if (mounted) widget.onSubmitted?.call();
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());

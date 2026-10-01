@@ -22,6 +22,7 @@ class Request {
   // ID liên kết với Firestore
   String? departmentId;
   String? userId;
+  List<String> categoryIds;
 
   // Relationships - dùng ở phía Flutter
   List<FileAttachment> fileAttachments;
@@ -50,6 +51,7 @@ class Request {
     this.postStatus,
     this.departmentId,
     this.userId,
+    this.categoryIds = const [],
     this.fileAttachments = const [],
     this.categories = const [],
     this.department,
@@ -76,6 +78,8 @@ class Request {
 
       departmentId: json['departmentId'],
       userId: json['userId'],
+      categoryIds:
+          (json['categoryIds'] as List?)?.whereType<String>().toList() ?? [],
 
       timeCreate: json['timeCreate'] != null
           ? DateTime.tryParse(json['timeCreate'].toString())
@@ -83,53 +87,46 @@ class Request {
 
       fileAttachments: json['fileAttachments'] != null
           ? (json['fileAttachments'] as List)
-              .map((e) => FileAttachment.fromJson(e))
-              .toList()
+                .map((e) => FileAttachment.fromJson(e))
+                .toList()
           : [],
 
       categories: json['categories'] != null
           ? (json['categories'] as List)
-              .map((e) => Category.fromJson(e))
-              .toList()
+                .map((e) => Category.fromJson(e))
+                .toList()
           : [],
 
       department: json['department'] != null
           ? Department.fromJson(json['department'])
           : null,
 
-      user: json['user'] != null
-          ? Users.fromJson(json['user'])
-          : null,
+      user: json['user'] != null ? Users.fromJson(json['user']) : null,
 
       comments: json['comments'] != null
-          ? (json['comments'] as List)
-              .map((e) => Comment.fromJson(e))
-              .toList()
+          ? (json['comments'] as List).map((e) => Comment.fromJson(e)).toList()
           : [],
 
-      clarificationConversation:
-          json['clarificationConversation'] != null
-              ? ClarificationConversation.fromJson(
-                  json['clarificationConversation'],
-                )
-              : null,
+      clarificationConversation: json['clarificationConversation'] != null
+          ? ClarificationConversation.fromJson(
+              json['clarificationConversation'],
+            )
+          : null,
 
       forwardingLogs: json['forwardingLogs'] != null
           ? (json['forwardingLogs'] as List)
-              .map((e) => ForwardingLog.fromJson(e))
-              .toList()
+                .map((e) => ForwardingLog.fromJson(e))
+                .toList()
           : [],
 
       statusHistory: json['statusHistory'] != null
           ? (json['statusHistory'] as List)
-              .map((e) => RequestStatusHistory.fromJson(e))
-              .toList()
+                .map((e) => RequestStatusHistory.fromJson(e))
+                .toList()
           : [],
 
       votes: json['votes'] != null
-          ? (json['votes'] as List)
-              .map((e) => Vote.fromJson(e))
-              .toList()
+          ? (json['votes'] as List).map((e) => Vote.fromJson(e)).toList()
           : [],
     );
   }
@@ -150,9 +147,9 @@ class Request {
 
       'departmentId': departmentId,
       'userId': userId,
+      'categoryIds': categoryIds,
 
-      'fileAttachments':
-          fileAttachments.map((e) => e.toJson()).toList(),
+      'fileAttachments': fileAttachments.map((e) => e.toJson()).toList(),
 
       'categories':
           categories.map((e) => e.toJson()).toList(),
@@ -202,8 +199,10 @@ class Request {
 
       userId: data['userId'],
 
-      timeCreate:
-          (data['timeCreate'] as Timestamp?)?.toDate(),
+      categoryIds:
+          (data['categoryIds'] as List?)?.whereType<String>().toList() ?? [],
+
+      timeCreate: (data['timeCreate'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -243,6 +242,7 @@ class Request {
     String? postStatus,
     String? departmentId,
     String? userId,
+    List<String>? categoryIds,
     List<FileAttachment>? fileAttachments,
     List<Category>? categories,
     Department? department,
@@ -264,6 +264,7 @@ class Request {
 
       departmentId: departmentId ?? this.departmentId,
       userId: userId ?? this.userId,
+      categoryIds: categoryIds ?? this.categoryIds,
 
       fileAttachments:
           fileAttachments ?? this.fileAttachments,

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'package:app_gdtm/models/enums/user_role.dart';
+import 'package:app_gdtm/models/Category.dart';
+import 'package:app_gdtm/models/Department.dart';
+import 'package:app_gdtm/models/Request.dart';
 import 'package:app_gdtm/models/Users.dart';
 import 'package:app_gdtm/widgets/app_colors.dart';
 import 'package:app_gdtm/widgets/app_menu.dart';
@@ -10,6 +13,8 @@ import 'package:app_gdtm/pages/login/login_page.dart';
 import 'package:app_gdtm/services/AuthService.dart';
 import 'package:app_gdtm/services/forum_service.dart';
 import 'package:app_gdtm/pages/student/send_feedback_page.dart';
+import 'package:app_gdtm/pages/student/feedback_history_page.dart';
+import 'package:app_gdtm/pages/student/feedback_detail_page.dart';
 import 'package:app_gdtm/pages/student/forum_page.dart';
 
 /// Trang chủ dashboard: khung (header + menu) dùng chung,
@@ -36,6 +41,9 @@ class _DashboardPageState extends State<DashboardPage> {
   // final String _userId = '23110147'; // TODO: lấy từ user đăng nhập
 
   String _selectedId = 'notifications';
+  Request? _selectedFeedback;
+  List<Department> _feedbackDepartments = [];
+  List<Category> _feedbackCategories = [];
 
   /// Service diễn đàn (dùng chung cho mọi role). Users.id là userId lưu trên Firestore.
   late final ForumService _forum = ForumService(
@@ -182,6 +190,32 @@ class _DashboardPageState extends State<DashboardPage> {
     switch (widget.role) {
       case UserRole.student:
         switch (_selectedId) {
+          case 'feedback_history':
+            return FeedbackHistoryPage(
+              user: widget.user,
+              onOpenDetail: (request, departments, categories) {
+                setState(() {
+                  _selectedFeedback = request;
+                  _feedbackDepartments = departments;
+                  _feedbackCategories = categories;
+                  _selectedId = 'feedback_detail';
+                });
+              },
+            );
+          case 'feedback_detail':
+            final request = _selectedFeedback;
+            if (request == null) {
+              return FeedbackHistoryPage(user: widget.user);
+            }
+            return FeedbackDetailPage(
+              request: request,
+              user: widget.user,
+              departments: _feedbackDepartments,
+              categories: _feedbackCategories,
+              onBack: () => setState(
+                () => _selectedId = 'feedback_history',
+              ),
+            );
           case 'notifications':
             return const NotificationPage();
           case 'send_feedback':
