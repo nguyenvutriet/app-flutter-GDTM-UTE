@@ -8,6 +8,7 @@ import 'package:app_gdtm/models/forum_post.dart';
 import 'package:app_gdtm/services/forum_service.dart';
 import 'package:app_gdtm/widgets/forum_utils.dart';
 import 'package:app_gdtm/widgets/post_card.dart';
+import 'package:app_gdtm/widgets/reactors_sheet.dart';
 import 'post_detail_page.dart';
 
 class ForumPage extends StatefulWidget {
@@ -187,6 +188,8 @@ class _ForumPageState extends State<ForumPage> {
               key: ValueKey(p.id),
               post: p,
               onReact: (t) => _react(p, t),
+              onShowReactors: () => showReactorsSheet(
+                  context, () => widget.service.getPostReactors(p.id)),
               onOpen: () => _openDetail(p),
             );
           }

@@ -7,6 +7,7 @@ import 'package:app_gdtm/services/forum_service.dart';
 import 'package:app_gdtm/widgets/comment_tile.dart';
 import 'package:app_gdtm/widgets/forum_utils.dart';
 import 'package:app_gdtm/widgets/post_card.dart';
+import 'package:app_gdtm/widgets/reactors_sheet.dart';
 
 class PostDetailPage extends StatefulWidget {
   final ForumPostDTO initialPost;
@@ -188,6 +189,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
               post: _post,
               expanded: true,
               onReact: _reactPost,
+              onShowReactors: () => showReactorsSheet(
+                  context, () => widget.service.getPostReactors(_post.id)),
               onTapComments: () => _focus.requestFocus(),
             ),
             Container(
@@ -217,6 +220,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         onReact: _reactComment,
                         onReply: _startReply,
                         onDelete: _deleteComment,
+                        onShowReactors: (c) => showReactorsSheet(
+                            context, () => widget.service.getCommentReactors(c.id)),
                       )),
               ]),
             ),

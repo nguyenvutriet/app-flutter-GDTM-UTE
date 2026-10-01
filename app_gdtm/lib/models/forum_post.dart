@@ -80,6 +80,13 @@ class CommentDTO {
 
   bool get isReply => parentId != null && parentId!.isNotEmpty;
 
+  /// ROLE_ADMIN (hiện màu đỏ) và ROLE_TEACHER (hiện màu xanh) được ưu tiên lên đầu.
+  bool get isAdmin => userRole.toUpperCase().contains('ADMIN');
+  bool get isTeacher => userRole.toUpperCase().contains('TEACHER');
+
+  /// 0 = admin, 1 = giảng viên, 2 = còn lại (số nhỏ hơn hiện trước)
+  int get rolePriority => isAdmin ? 0 : (isTeacher ? 1 : 2);
+
   CommentDTO copyWith({
     Map<String, int>? reactions,
     String? reactionType,
@@ -190,4 +197,28 @@ class VoteResult {
   const VoteResult({required this.counts, this.currentType});
 
   int get total => counts.values.fold(0, (a, b) => a + b);
+}
+
+/// Một người đã thả reaction (cho danh sách "ai đã thả reaction")
+class ReactorDTO {
+  final String userId;
+  final String userName;
+  final String type; // LIKE, LOVE, ...
+  final DateTime? date;
+  final String userRole;
+
+  const ReactorDTO({
+    required this.userId,
+    required this.userName,
+    required this.type,
+    this.date,
+    this.userRole = 'ROLE_STUDENT',
+  });
+
+  bool get isAdmin => userRole.toUpperCase().contains('ADMIN');
+  bool get isTeacher => userRole.toUpperCase().contains('TEACHER');
+
+  /// Tích xanh cho tài khoản không phải sinh viên (giống bình luận)
+  bool get isVerified =>
+      userRole.isNotEmpty && !userRole.toUpperCase().contains('STUDENT');
 }
