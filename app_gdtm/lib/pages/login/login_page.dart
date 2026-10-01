@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:app_gdtm/models/enums/user_role.dart';
 import 'package:app_gdtm/pages/common/dashboard_page.dart';
+import 'package:app_gdtm/pages/login/forgot_password_page.dart';
 import 'package:app_gdtm/services/AuthService.dart';
 import 'package:app_gdtm/widgets/app_colors.dart';
 import 'package:app_gdtm/models/Users.dart';
@@ -118,17 +119,14 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-  /// Nút "Quên mật khẩu".
-  /// TODO(forgot-password): thực thi chức năng quên mật khẩu tại đây
-  /// (vd: mở trang ForgotPasswordPage, hoặc gửi email đặt lại mật khẩu).
+  /// Nút "Quên mật khẩu": mở trang quên mật khẩu (push để nút "Đăng nhập"
+  /// bên đó có thể pop quay lại form đăng nhập).
   void _onForgotPassword() {
-    _showInfo('Chức năng quên mật khẩu đang được phát triển.');
-  }
-
-  void _showInfo(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    if (_loading) return;
+    FocusScope.of(context).unfocus();
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ForgotPasswordPage()),
+    );
   }
 
   // ============================================================
