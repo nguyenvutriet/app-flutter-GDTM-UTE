@@ -18,7 +18,7 @@ void main() async {
   // Chỉ Android/iOS mới cần. Web dùng popup của Firebase Auth.
   if (!kIsWeb) {
     await GoogleSignIn.instance.initialize(
-      serverClientId: 'DÁN_WEB_CLIENT_ID_VÀO_ĐÂY.apps.googleusercontent.com',
+      serverClientId: '44251978625-ep2eb0v0kbrdkdb41vs0anui5nuslk0g.apps.googleusercontent.com',
     );
   }
 

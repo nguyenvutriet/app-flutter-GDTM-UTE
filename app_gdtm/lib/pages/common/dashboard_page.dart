@@ -8,8 +8,9 @@ import 'package:app_gdtm/widgets/app_shell.dart';
 import 'package:app_gdtm/pages/common/notification_page.dart';
 import 'package:app_gdtm/pages/login/login_page.dart';
 import 'package:app_gdtm/services/AuthService.dart';
+import 'package:app_gdtm/services/forum_service.dart';
 import 'package:app_gdtm/pages/student/send_feedback_page.dart';
-
+import 'package:app_gdtm/pages/student/forum_page.dart';
 
 /// Trang chủ dashboard: khung (header + menu) dùng chung,
 /// menu và nội dung đổi theo role và mục menu được chọn.
@@ -36,8 +37,12 @@ class _DashboardPageState extends State<DashboardPage> {
 
   String _selectedId = 'notifications';
 
+  /// Service diễn đàn (dùng chung cho mọi role). Users.id là userId lưu trên Firestore.
+  late final ForumService _forum = ForumService(
+    currentUserId: () => widget.user.id,
+  );
 
-    /// Mục "Đăng xuất" ghim ở đáy menu, dùng chung mọi role.
+  /// Mục "Đăng xuất" ghim ở đáy menu, dùng chung mọi role.
   static const AppMenuItem _logoutItem = AppMenuItem(
     id: 'logout',
     title: 'Đăng xuất',
@@ -161,6 +166,16 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  /// Trang diễn đàn dùng chung. [onCompose] chỉ có ở sinh viên (nơi gửi được góp ý).
+  Widget _forumPage({VoidCallback? onCompose}) {
+    return ForumPage(
+      service: _forum,
+      embedded: true, // AppShell đã có header, không vẽ AppBar riêng
+      currentUserName: widget.user.fullName ?? '',
+      onCompose: onCompose,
+    );
+  }
+
   /// Nội dung theo role + menu đang chọn.
   /// Thêm trang mới: thêm một `case` với id của menu ở đúng role.
   Widget _buildContent() {
@@ -175,7 +190,10 @@ class _DashboardPageState extends State<DashboardPage> {
               // Gửi xong thì chuyển sang "Lịch sử góp ý" (khi trang đó làm xong)
               onSubmitted: () => setState(() => _selectedId = 'feedback_history'),
             );
-          // TODO: case 'send_feedback': return const SendFeedbackPage();
+          case 'forum':
+            return _forumPage(
+              onCompose: () => setState(() => _selectedId = 'send_feedback'),
+            );
           default:
             return _PlaceholderPage(title: _titleOf(_selectedId));
         }
@@ -184,6 +202,8 @@ class _DashboardPageState extends State<DashboardPage> {
         switch (_selectedId) {
           case 'notifications':
             return const NotificationPage();
+          case 'forum':
+            return _forumPage();
           // TODO: case 'statistics': return const StatisticsPage();
           default:
             return _PlaceholderPage(title: _titleOf(_selectedId));
@@ -193,6 +213,8 @@ class _DashboardPageState extends State<DashboardPage> {
         switch (_selectedId) {
           case 'notifications':
             return const NotificationPage();
+          case 'forum':
+            return _forumPage();
           // TODO: case 'manage_categories': return const CategoriesPage();
           default:
             return _PlaceholderPage(title: _titleOf(_selectedId));

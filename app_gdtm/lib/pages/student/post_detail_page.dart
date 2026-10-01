@@ -1,0 +1,294 @@
+// lib/pages/student/post_detail_page.dart
+// Chi tiết bài viết kiểu Facebook: bài viết + bình luận + trả lời + ô nhập cố định phía dưới.
+import 'package:flutter/material.dart';
+
+import 'package:app_gdtm/models/forum_post.dart';
+import 'package:app_gdtm/services/forum_service.dart';
+import 'package:app_gdtm/widgets/comment_tile.dart';
+import 'package:app_gdtm/widgets/forum_utils.dart';
+import 'package:app_gdtm/widgets/post_card.dart';
+
+class PostDetailPage extends StatefulWidget {
+  final ForumPostDTO initialPost;
+  final ForumService service;
+
+  /// Báo ngược về bảng tin khi reaction / số bình luận thay đổi
+  final ValueChanged<ForumPostDTO>? onPostChanged;
+
+  const PostDetailPage({
+    super.key,
+    required this.initialPost,
+    required this.service,
+    this.onPostChanged,
+  });
+
+  @override
+  State<PostDetailPage> createState() => _PostDetailPageState();
+}
+
+class _PostDetailPageState extends State<PostDetailPage> {
+  late ForumPostDTO _post;
+  bool _loading = true;
+  bool _sending = false;
+  CommentDTO? _replyTo;
+
+  final TextEditingController _ctl = TextEditingController();
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _post = widget.initialPost;
+    Future.microtask(_refresh);
+  }
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _setPost(ForumPostDTO p) {
+    if (!mounted) return;
+    setState(() => _post = p);
+    widget.onPostChanged?.call(p);
+  }
+
+  int _total(List<CommentDTO> list) =>
+      list.fold(0, (sum, c) => sum + 1 + c.replies.length);
+
+  Future<void> _refresh() async {
+    try {
+      final p = await widget.service.getPostDetail(widget.initialPost.id);
+      if (!mounted) return;
+      if (p == null) {
+        _snack('Bài viết không còn tồn tại');
+        Navigator.pop(context);
+        return;
+      }
+      _setPost(p);
+    } catch (e) {
+      _snack(e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _reloadComments() async {
+    final comments = await widget.service.getComments(_post.id);
+    _setPost(_post.copyWith(comments: comments, commentCount: _total(comments)));
+  }
+
+  Future<void> _reactPost(String type) async {
+    try {
+      final r = await widget.service.votePost(_post.id, type);
+      _setPost(_post.copyWith(
+        reactions: r.counts,
+        reactionType: r.currentType,
+        clearReaction: r.currentType == null,
+      ));
+    } catch (e) {
+      _snack(e.toString());
+    }
+  }
+
+  List<CommentDTO> _mapTree(
+    List<CommentDTO> list,
+    String id,
+    CommentDTO Function(CommentDTO) fn,
+  ) =>
+      list.map((c) {
+        if (c.id == id) return fn(c);
+        if (c.replies.isEmpty) return c;
+        return c.copyWith(replies: _mapTree(c.replies, id, fn));
+      }).toList();
+
+  Future<void> _reactComment(CommentDTO c, String type) async {
+    try {
+      final r = await widget.service.voteComment(c.id, type);
+      _setPost(_post.copyWith(
+        comments: _mapTree(
+          _post.comments,
+          c.id,
+          (x) => x.copyWith(
+            reactions: r.counts,
+            reactionType: r.currentType,
+            clearReaction: r.currentType == null,
+          ),
+        ),
+      ));
+    } catch (e) {
+      _snack(e.toString());
+    }
+  }
+
+  void _startReply(CommentDTO c) {
+    setState(() => _replyTo = c);
+    _focus.requestFocus();
+  }
+
+  Future<void> _deleteComment(CommentDTO c) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xóa bình luận?'),
+        content: const Text('Bình luận (và các phản hồi của nó) sẽ bị ẩn.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Xóa')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget.service.deleteComment(c.id);
+      await _reloadComments();
+    } catch (e) {
+      _snack(e.toString());
+    }
+  }
+
+  Future<void> _send() async {
+    final text = _ctl.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await widget.service.addComment(_post.id, text, replyTo: _replyTo);
+      _ctl.clear();
+      if (mounted) setState(() => _replyTo = null);
+      await _reloadComments();
+    } catch (e) {
+      _snack(e.toString());
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kFbBg,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 0.5,
+        title: Text('Bài viết của ${_post.userName}',
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+      ),
+      body: Column(children: [
+        Expanded(
+          child: ListView(children: [
+            PostCard(
+              post: _post,
+              expanded: true,
+              onReact: _reactPost,
+              onTapComments: () => _focus.requestFocus(),
+            ),
+            Container(
+              color: Colors.white,
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Bình luận',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 8),
+                if (_loading && _post.comments.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_post.comments.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text('Chưa có bình luận nào. Hãy là người đầu tiên!',
+                          style: TextStyle(color: kFbText2)),
+                    ),
+                  )
+                else
+                  ..._post.comments.map((c) => CommentTile(
+                        comment: c,
+                        onReact: _reactComment,
+                        onReply: _startReply,
+                        onDelete: _deleteComment,
+                      )),
+              ]),
+            ),
+          ]),
+        ),
+        _inputBar(),
+      ]),
+    );
+  }
+
+  Widget _inputBar() => Container(
+        color: Colors.white,
+        child: SafeArea(
+          top: false,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Divider(height: 1),
+            if (_replyTo != null)
+              Container(
+                color: kFbBg,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Row(children: [
+                  Expanded(
+                    child: Text('Đang trả lời ${_replyTo!.userName}',
+                        style: const TextStyle(color: kFbText2, fontSize: 13)),
+                  ),
+                  GestureDetector(
+                    onTap: () => setState(() => _replyTo = null),
+                    child: const Icon(Icons.close, size: 18, color: kFbText2),
+                  ),
+                ]),
+              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+              child: Row(children: [
+                Expanded(
+                  child: TextField(
+                    controller: _ctl,
+                    focusNode: _focus,
+                    minLines: 1,
+                    maxLines: 4,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      hintText: _replyTo == null
+                          ? 'Viết bình luận...'
+                          : 'Phản hồi ${_replyTo!.userName}...',
+                      filled: true,
+                      fillColor: kFbBg,
+                      isDense: true,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(22),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                _sending
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2)),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.send, color: kFbBlue),
+                        onPressed: _send,
+                      ),
+              ]),
+            ),
+          ]),
+        ),
+      );
+}
