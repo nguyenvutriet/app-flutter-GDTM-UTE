@@ -1,8 +1,13 @@
+// lib/pages/admin/category_management_page.dart
+// Quản lý danh mục (admin): thống kê, tìm kiếm, thêm, sửa tên, vô hiệu hóa/kích hoạt.
+// Responsive: >= 720px hiển thị dạng bảng, nhỏ hơn hiển thị dạng thẻ.
+// embedded = true: dùng bên trong AppShell (không có Scaffold/AppBar riêng).
 import 'package:flutter/material.dart';
 
 import 'package:app_gdtm/models/Category.dart';
 import 'package:app_gdtm/services/CategoryService.dart';
-import 'package:app_gdtm/widgets/forum_utils.dart'; 
+import 'package:app_gdtm/widgets/forum_utils.dart'; // kFbBg, kFbBlue, kFbText2
+import 'package:app_gdtm/widgets/page_title.dart';
 
 class CategoryManagementPage extends StatefulWidget {
   final CategoryService service;
@@ -209,12 +214,8 @@ class _CategoryManagementPageState extends State<CategoryManagementPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       if (widget.embedded) ...[
-                        const Text('Quản lý danh mục',
-                            style: TextStyle(
-                                color: kFbBlue,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 22)),
-                        const SizedBox(height: 12),
+                        const PageTitle('QUẢN LÝ DANH MỤC'),
+                        const SizedBox(height: 16),
                       ],
                       _stats(),
                       const SizedBox(height: 12),
