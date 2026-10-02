@@ -16,6 +16,7 @@ import 'package:app_gdtm/pages/student/send_feedback_page.dart';
 import 'package:app_gdtm/pages/student/feedback_history_page.dart';
 import 'package:app_gdtm/pages/student/feedback_detail_page.dart';
 import 'package:app_gdtm/pages/student/forum_page.dart';
+import 'package:app_gdtm/pages/common/change_password_page.dart';
 
 /// Trang chủ dashboard: khung (header + menu) dùng chung,
 /// menu và nội dung đổi theo role và mục menu được chọn.
@@ -184,6 +185,15 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  /// Trang đổi mật khẩu dùng chung cho mọi role.
+  /// Đổi xong quay về trang chủ (mục "Thông báo" - mục mở sẵn sau khi đăng nhập).
+  Widget _changePasswordPage() {
+    return ChangePasswordPage(
+      user: widget.user,
+      onSuccess: () => setState(() => _selectedId = 'notifications'),
+    );
+  }
+
   /// Nội dung theo role + menu đang chọn.
   /// Thêm trang mới: thêm một `case` với id của menu ở đúng role.
   Widget _buildContent() {
@@ -228,6 +238,10 @@ class _DashboardPageState extends State<DashboardPage> {
             return _forumPage(
               onCompose: () => setState(() => _selectedId = 'send_feedback'),
             );
+
+          case 'change_password':
+            return _changePasswordPage();
+
           default:
             return _PlaceholderPage(title: _titleOf(_selectedId));
         }
@@ -238,6 +252,10 @@ class _DashboardPageState extends State<DashboardPage> {
             return const NotificationPage();
           case 'forum':
             return _forumPage();
+
+          case 'change_password':
+            return _changePasswordPage();
+
           // TODO: case 'statistics': return const StatisticsPage();
           default:
             return _PlaceholderPage(title: _titleOf(_selectedId));
@@ -250,6 +268,10 @@ class _DashboardPageState extends State<DashboardPage> {
           case 'forum':
             return _forumPage();
           // TODO: case 'manage_categories': return const CategoriesPage();
+          
+          case 'change_password':
+            return _changePasswordPage();
+
           default:
             return _PlaceholderPage(title: _titleOf(_selectedId));
         }

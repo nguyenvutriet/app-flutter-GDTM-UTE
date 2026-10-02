@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:app_gdtm/pages/login/auth_layout.dart';
+import 'package:app_gdtm/pages/login/reset_password_page.dart';
 import 'package:app_gdtm/services/PasswordResetService.dart';
 import 'package:app_gdtm/widgets/app_colors.dart';
 
@@ -13,8 +14,8 @@ import 'package:app_gdtm/widgets/app_colors.dart';
 /// - Dưới ô nhập, căn giữa: "Vui lòng nhập mã OTP, 1:30" đếm ngược; về 0:00 thì
 ///   đổi thành "Bạn chưa nhận được mã? Gửi lại mã". Bấm "Gửi lại mã" sẽ gửi OTP
 ///   mới vào email và đếm lại từ 1:30.
-/// - Nút "Xác nhận" kiểm tra mã. Nhập đúng thì DỪNG TẠI ĐÂY (chưa chuyển sang
-///   trang nhập mật khẩu mới - xem TODO ở [_onConfirm]).
+/// - Nút "Xác nhận" kiểm tra mã. Nhập đúng thì chuyển sang [ResetPasswordPage]
+///   (đặt lại mật khẩu).
 /// - Link "Đăng nhập" góc trái dưới card quay thẳng về form đăng nhập.
 class OtpVerificationPage extends StatefulWidget {
   const OtpVerificationPage({super.key, required this.session});
@@ -94,10 +95,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
   void _onConfirm() {
     if (_resending) return;
 
-    if (_verified) {
-      _showInfo('Xác thực OTP thành công.');
-      return;
-    }
+    if (_verified) return;
 
     final code = _codeCtrl.text;
     if (code.length < _codeLength) {
@@ -123,10 +121,13 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
       _codeError = null;
     });
 
-    // TODO(reset-password): mở trang nhập mật khẩu mới tại đây, truyền
-    //   widget.session (có userDocId để cập nhật mật khẩu trên Firestore).
-    //   Hiện tại chỉ dừng ở bước xác thực OTP theo yêu cầu.
-    _showInfo('Xác thực OTP thành công.');
+    // Đúng OTP -> sang trang đặt lại mật khẩu. Dùng pushReplacement để nút Back
+    // ở trang đó không quay lại trang OTP đã xác thực.
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => ResetPasswordPage(session: widget.session),
+      ),
+    );
   }
 
   Future<void> _onResend() async {

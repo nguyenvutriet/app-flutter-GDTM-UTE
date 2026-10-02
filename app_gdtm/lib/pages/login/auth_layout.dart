@@ -203,3 +203,40 @@ class AuthErrorBanner extends StatelessWidget {
     );
   }
 }
+
+/// Style ô nhập dùng chung: nền trắng, viền xám xanh; khi lỗi thì viền, label
+/// và dòng báo lỗi đều đỏ (giống web).
+InputDecoration authInputDecoration(String label, {Widget? suffixIcon}) {
+  OutlineInputBorder border(Color color, [double width = 1]) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(4),
+      borderSide: BorderSide(color: color, width: width),
+    );
+  }
+
+  TextStyle labelStyle(Set<WidgetState> states, double size) {
+    final isError = states.contains(WidgetState.error);
+    return TextStyle(
+      color: isError ? kAuthErrorColor : kAuthMutedColor,
+      fontSize: size,
+    );
+  }
+
+  return InputDecoration(
+    labelText: label,
+    labelStyle: WidgetStateTextStyle.resolveWith((s) => labelStyle(s, 16)),
+    floatingLabelStyle:
+        WidgetStateTextStyle.resolveWith((s) => labelStyle(s, 14)),
+    errorStyle: const TextStyle(color: kAuthErrorColor, fontSize: 12),
+    errorMaxLines: 3,
+    filled: true,
+    fillColor: Colors.white,
+    suffixIcon: suffixIcon,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+    enabledBorder: border(kAuthFieldBorder),
+    disabledBorder: border(kAuthFieldBorder),
+    focusedBorder: border(AppColors.primary, 2),
+    errorBorder: border(kAuthErrorColor),
+    focusedErrorBorder: border(kAuthErrorColor, 2),
+  );
+}
