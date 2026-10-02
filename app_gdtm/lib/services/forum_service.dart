@@ -31,6 +31,7 @@ class ForumService {
   static const String usersCollection = 'users'; // doc id = Users.id
   static const String departmentsCollection = 'department';
   static const String categoriesCollection = 'categories';
+  static const String commentReportsCollection = 'commentreport';
 
   static const int _whereInLimit = 30;
 
@@ -250,6 +251,41 @@ class ForumService {
       batch.update(r.reference, {'isActive': false});
     }
     await batch.commit();
+  }
+
+  /// Báo cáo bình luận. Doc id = "{userId}_{commentId}" nên mỗi người chỉ báo cáo
+  /// một bình luận được đúng 1 lần (kiểm tra trong transaction).
+  /// Quản trị viên không được báo cáo (họ là người duyệt).
+  Future<void> reportComment(String commentId, String reason) async {
+    final uid = _uid;
+
+    final me = (await _loadUsers({uid}))[uid];
+    if (_userRole(me).toUpperCase().contains('ADMIN')) {
+      throw ForumException('Quản trị viên không thể báo cáo bình luận');
+    }
+
+    final text = reason.trim();
+    if (text.isEmpty) throw ForumException('Vui lòng chọn lý do báo cáo');
+
+    final cDoc = await _db.collection(commentsCollection).doc(commentId).get();
+    if (!cDoc.exists) throw ForumException('Bình luận không còn tồn tại');
+    if (cDoc.data()?['userId'] == uid) {
+      throw ForumException('Bạn không thể báo cáo bình luận của chính mình');
+    }
+
+    final ref = _db.collection(commentReportsCollection).doc('${uid}_$commentId');
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      if (snap.exists) throw ForumException('Bạn đã báo cáo bình luận này rồi');
+      tx.set(ref, {
+        'id': ref.id,
+        'reason': text,
+        'status': 'pending',
+        'commentId': commentId,
+        'studentId': uid,
+        'createdAt': Timestamp.now(),
+      });
+    });
   }
 
   /// Reaction cho bình luận (VoteComment). Doc id = "{userId}_{commentId}".
@@ -505,7 +541,7 @@ class ForumService {
   /// Hỗ trợ cả hai kiểu lưu: doc id = Users.id, hoặc doc id bất kỳ + field 'id' = Users.id.
   Future<Map<String, Map<String, dynamic>>> _loadUsers(Set<String> ids) async {
     final out = <String, Map<String, dynamic>>{};
-    final list = ids.toList();
+    final list = ids.where((e) => e.trim().isNotEmpty).toList();
     for (var i = 0; i < list.length; i += _whereInLimit) {
       final chunk = list.sublist(i, i + _whereInLimit > list.length ? list.length : i + _whereInLimit);
       final byDocId = _db

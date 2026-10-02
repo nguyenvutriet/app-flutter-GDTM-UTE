@@ -1,5 +1,5 @@
 // lib/widgets/comment_tile.dart
-// Bình luận kiểu Facebook: bong bóng xám, Thích · Phản hồi · Xóa, reply thụt lề.
+// Bình luận kiểu Facebook: bong bóng xám, Thích · Phản hồi · Báo cáo · Xóa, reply thụt lề.
 import 'package:flutter/material.dart';
 import 'package:app_gdtm/models/forum_post.dart';
 import 'forum_utils.dart';
@@ -13,6 +13,15 @@ class CommentTile extends StatelessWidget {
   final ValueChanged<CommentDTO> onDelete;
   final ValueChanged<CommentDTO>? onShowReactors;
 
+  /// Null thì ẩn nút "Báo cáo". Chỉ hiện ở bình luận của người khác.
+  final ValueChanged<CommentDTO>? onReport;
+
+  /// Id bình luận cần làm nổi bật (khi admin bấm "Xem" từ trang báo cáo)
+  final String? highlightId;
+
+  /// Bảng GlobalKey theo id bình luận để trang cha cuộn tới đúng bình luận
+  final Map<String, GlobalKey>? anchors;
+
   const CommentTile({
     super.key,
     required this.comment,
@@ -20,6 +29,9 @@ class CommentTile extends StatelessWidget {
     required this.onReply,
     required this.onDelete,
     this.onShowReactors,
+    this.onReport,
+    this.highlightId,
+    this.anchors,
     this.isReply = false,
   });
 
@@ -34,14 +46,19 @@ class CommentTile extends StatelessWidget {
     final Color? roleColor = c.isAdmin
         ? const Color(0xFFD32F2F)
         : (c.isTeacher ? kFbBlue : null);
-    final Color bubbleColor = c.isAdmin
-        ? const Color(0xFFFDECEA)
-        : (c.isTeacher ? const Color(0xFFE7F3FF) : kFbBg);
+    final bool isFocus = highlightId != null && highlightId == c.id;
+    final Color bubbleColor = isFocus
+        ? const Color(0xFFFFF4CC)
+        : (c.isAdmin
+            ? const Color(0xFFFDECEA)
+            : (c.isTeacher ? const Color(0xFFE7F3FF) : kFbBg));
     final String? roleLabel =
         c.isAdmin ? 'Quản trị viên' : (c.isTeacher ? 'Giảng viên' : null);
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(
+      KeyedSubtree(
+        key: anchors?.putIfAbsent(c.id, () => GlobalKey()),
+        child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           InitialAvatar(name: c.userName, radius: isReply ? 14 : 18),
@@ -122,6 +139,23 @@ class CommentTile extends StatelessWidget {
                                 color: kFbText2)),
                       ),
                     ),
+                    // Báo cáo: chỉ với bình luận của người khác
+                    if (onReport != null && !c.canDelete)
+                      GestureDetector(
+                        onTap: () => onReport!(c),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.flag_outlined, size: 14, color: kFbText2),
+                            SizedBox(width: 2),
+                            Text('Báo cáo',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: kFbText2)),
+                          ]),
+                        ),
+                      ),
                     if (c.canDelete)
                       GestureDetector(
                         onTap: () => onDelete(c),
@@ -148,7 +182,7 @@ class CommentTile extends StatelessWidget {
             ]),
           ),
         ]),
-      ),
+      )),
       if (c.replies.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(left: 44),
@@ -161,6 +195,9 @@ class CommentTile extends StatelessWidget {
                       onReply: onReply,
                       onDelete: onDelete,
                       onShowReactors: onShowReactors,
+                      onReport: onReport,
+                      highlightId: highlightId,
+                      anchors: anchors,
                     ))
                 .toList(),
           ),

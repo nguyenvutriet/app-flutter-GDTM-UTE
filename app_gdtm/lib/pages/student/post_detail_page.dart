@@ -8,6 +8,7 @@ import 'package:app_gdtm/widgets/comment_tile.dart';
 import 'package:app_gdtm/widgets/forum_utils.dart';
 import 'package:app_gdtm/widgets/post_card.dart';
 import 'package:app_gdtm/widgets/reactors_sheet.dart';
+import 'package:app_gdtm/widgets/report_comment_dialog.dart';
 
 class PostDetailPage extends StatefulWidget {
   final ForumPostDTO initialPost;
@@ -16,11 +17,19 @@ class PostDetailPage extends StatefulWidget {
   /// Báo ngược về bảng tin khi reaction / số bình luận thay đổi
   final ValueChanged<ForumPostDTO>? onPostChanged;
 
+  /// Cuộn tới và làm nổi bật bình luận này (admin bấm "Xem" từ trang báo cáo)
+  final String? focusCommentId;
+
+  /// false = ẩn nút "Báo cáo" (dùng cho admin)
+  final bool canReport;
+
   const PostDetailPage({
     super.key,
     required this.initialPost,
     required this.service,
     this.onPostChanged,
+    this.focusCommentId,
+    this.canReport = true,
   });
 
   @override
@@ -32,6 +41,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
   bool _loading = true;
   bool _sending = false;
   CommentDTO? _replyTo;
+
+  final Map<String, GlobalKey> _anchors = {};
+  bool _scrolled = false;
 
   final TextEditingController _ctl = TextEditingController();
   final FocusNode _focus = FocusNode();
@@ -74,11 +86,34 @@ class _PostDetailPageState extends State<PostDetailPage> {
         return;
       }
       _setPost(p);
+      _scrollToFocus();
     } catch (e) {
       _snack(e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Cuộn tới bình luận được trỏ tới (nếu có).
+  void _scrollToFocus() {
+    final id = widget.focusCommentId;
+    if (id == null || _scrolled) return;
+    _scrolled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future.delayed(const Duration(milliseconds: 200));
+      if (!mounted) return;
+      final ctx = _anchors[id]?.currentContext;
+      if (ctx == null) {
+        _snack('Bình luận này đã bị ẩn hoặc không còn tồn tại');
+        return;
+      }
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+        alignment: 0.15,
+      );
+    });
   }
 
   Future<void> _reloadComments() async {
@@ -134,6 +169,10 @@ class _PostDetailPageState extends State<PostDetailPage> {
     _focus.requestFocus();
   }
 
+  /// Báo cáo bình luận vi phạm (mỗi người chỉ báo cáo 1 bình luận được 1 lần).
+  void _reportComment(CommentDTO c) =>
+      showReportCommentDialog(context, service: widget.service, comment: c);
+
   Future<void> _deleteComment(CommentDTO c) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -184,7 +223,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
       ),
       body: Column(children: [
         Expanded(
-          child: ListView(children: [
+          child: SingleChildScrollView(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             PostCard(
               post: _post,
               expanded: true,
@@ -220,12 +260,15 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         onReact: _reactComment,
                         onReply: _startReply,
                         onDelete: _deleteComment,
+                        onReport: widget.canReport ? _reportComment : null,
+                        highlightId: widget.focusCommentId,
+                        anchors: _anchors,
                         onShowReactors: (c) => showReactorsSheet(
                             context, () => widget.service.getCommentReactors(c.id)),
                       )),
               ]),
             ),
-          ]),
+          ])),
         ),
         _inputBar(),
       ]),

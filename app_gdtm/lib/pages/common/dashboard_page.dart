@@ -19,6 +19,8 @@ import 'package:app_gdtm/pages/student/feedback_detail_page.dart';
 import 'package:app_gdtm/pages/student/forum_page.dart';
 import 'package:app_gdtm/pages/common/change_password_page.dart';
 import 'package:app_gdtm/pages/admin/category_management_page.dart';
+import 'package:app_gdtm/services/comment_report_service.dart';
+import 'package:app_gdtm/pages/admin/violation_comments_page.dart';
 
 /// Trang chủ dashboard: khung (header + menu) dùng chung,
 /// menu và nội dung đổi theo role và mục menu được chọn.
@@ -55,6 +57,11 @@ class _DashboardPageState extends State<DashboardPage> {
 
   /// Service danh mục (dùng cho trang quản lý danh mục của admin).
   final CategoryService _categoryService = CategoryService();
+
+  /// Service kiểm duyệt báo cáo bình luận (admin).
+  late final CommentReportService _reportService = CommentReportService(
+    currentUserId: () => widget.user.id,
+  );
 
   /// Mục "Đăng xuất" ghim ở đáy menu, dùng chung mọi role.
   static const AppMenuItem _logoutItem = AppMenuItem(
@@ -277,6 +284,13 @@ class _DashboardPageState extends State<DashboardPage> {
           case 'change_password':
             return _changePasswordPage();
 
+          case 'violation_comments':
+            return ViolationCommentsPage(
+              service: _reportService,
+              forum: _forum,
+              embedded: true,
+            );
+            
           case 'manage_categories':
             return CategoryManagementPage(
               service: _categoryService,
