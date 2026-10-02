@@ -12,11 +12,13 @@ import 'package:app_gdtm/pages/common/notification_page.dart';
 import 'package:app_gdtm/pages/login/login_page.dart';
 import 'package:app_gdtm/services/AuthService.dart';
 import 'package:app_gdtm/services/forum_service.dart';
+import 'package:app_gdtm/services/CategoryService.dart';
 import 'package:app_gdtm/pages/student/send_feedback_page.dart';
 import 'package:app_gdtm/pages/student/feedback_history_page.dart';
 import 'package:app_gdtm/pages/student/feedback_detail_page.dart';
 import 'package:app_gdtm/pages/student/forum_page.dart';
 import 'package:app_gdtm/pages/common/change_password_page.dart';
+import 'package:app_gdtm/pages/admin/category_management_page.dart';
 
 /// Trang chủ dashboard: khung (header + menu) dùng chung,
 /// menu và nội dung đổi theo role và mục menu được chọn.
@@ -50,6 +52,9 @@ class _DashboardPageState extends State<DashboardPage> {
   late final ForumService _forum = ForumService(
     currentUserId: () => widget.user.id,
   );
+
+  /// Service danh mục (dùng cho trang quản lý danh mục của admin).
+  final CategoryService _categoryService = CategoryService();
 
   /// Mục "Đăng xuất" ghim ở đáy menu, dùng chung mọi role.
   static const AppMenuItem _logoutItem = AppMenuItem(
@@ -272,6 +277,11 @@ class _DashboardPageState extends State<DashboardPage> {
           case 'change_password':
             return _changePasswordPage();
 
+          case 'manage_categories':
+            return CategoryManagementPage(
+              service: _categoryService,
+              embedded: true, // AppShell đã có header, không vẽ AppBar riêng
+            );
           default:
             return _PlaceholderPage(title: _titleOf(_selectedId));
         }
