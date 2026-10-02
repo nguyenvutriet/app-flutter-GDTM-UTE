@@ -141,7 +141,8 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
         builder: (ctx) => AlertDialog(
           title: const Text('Xác nhận vi phạm?'),
           content: const Text(
-              'Bình luận sẽ bị ẩn khỏi diễn đàn. Các báo cáo đang chờ của bình luận này cũng được chốt là vi phạm.'),
+              'Bình luận sẽ bị ẩn với mọi người dùng (admin vẫn thấy ở dạng mờ). '
+              'Các báo cáo đang chờ của bình luận này cũng được chốt là vi phạm.'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
             FilledButton(
@@ -157,6 +158,37 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
     try {
       await widget.service.resolve(r, violation: violation);
       _toast(violation ? 'Đã ẩn bình luận vi phạm' : 'Đã đánh dấu không vi phạm');
+      _load(silent: true);
+    } catch (e) {
+      _toast('Lỗi: $e');
+    }
+  }
+
+  /// Ẩn / hiện lại bình luận của một báo cáo đã xử lý.
+  Future<void> _toggleHidden(ReportItem r) async {
+    final hide = !r.commentHidden;
+    if (hide) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Ẩn bình luận?'),
+          content: const Text(
+              'Bình luận sẽ bị ẩn với mọi người dùng (admin vẫn thấy ở dạng mờ).'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: _red),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Ẩn bình luận'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    try {
+      await widget.forum.setCommentHidden(r.commentId, hidden: hide);
+      _toast(hide ? 'Đã ẩn bình luận' : 'Đã hiện lại bình luận');
       _load(silent: true);
     } catch (e) {
       _toast('Lỗi: $e');
@@ -441,7 +473,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
   }
 
   Widget _row(ReportItem r) {
-    final dim = r.status == ReportStatus.violation;
+    final dim = r.commentHidden;
     final color = dim ? kFbText2 : Colors.black87;
     Widget txt(String s, {bool bold = false, bool strike = false}) => Text(
           s,
@@ -496,10 +528,9 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: r.status == ReportStatus.violation ? kFbText2 : Colors.black87,
-                          decoration: r.status == ReportStatus.violation
-                              ? TextDecoration.lineThrough
-                              : null,
+                          color: r.commentHidden ? kFbText2 : Colors.black87,
+                          decoration:
+                              r.commentHidden ? TextDecoration.lineThrough : null,
                         )),
                     const SizedBox(height: 6),
                     Text('Lý do: ${r.reason}', style: const TextStyle(fontSize: 13)),
@@ -568,29 +599,53 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
     );
   }
 
-  Widget _menu(ReportItem r) => PopupMenuButton<String>(
-        icon: const Icon(Icons.more_vert, color: kFbText2),
-        tooltip: 'Duyệt báo cáo',
-        onSelected: (v) => _resolve(r, v == 'bad'),
-        itemBuilder: (_) => [
-          PopupMenuItem(
-            value: 'ok',
-            enabled: r.status != ReportStatus.notViolation,
-            child: const Row(children: [
-              Icon(Icons.check_box, size: 18, color: _green),
-              SizedBox(width: 10),
-              Text('Không vi phạm', style: TextStyle(color: _green)),
-            ]),
-          ),
-          PopupMenuItem(
-            value: 'bad',
-            enabled: r.status != ReportStatus.violation,
-            child: const Row(children: [
-              Icon(Icons.block, size: 18, color: _red),
-              SizedBox(width: 10),
-              Text('Vi phạm — ẩn bình luận', style: TextStyle(color: _red)),
-            ]),
-          ),
-        ],
-      );
+  /// Báo cáo đang chờ: duyệt (Không vi phạm / Vi phạm — ẩn).
+  /// Báo cáo đã xử lý: chốt rồi, chỉ còn ẩn / hiện lại bình luận.
+  Widget _menu(ReportItem r) {
+    final pending = r.status == ReportStatus.pending;
+    // Đã xử lý mà bình luận không còn (bị xóa) thì không còn thao tác nào
+    if (!pending && (!r.commentExists || !r.commentActive)) {
+      return const SizedBox.shrink();
+    }
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, color: kFbText2),
+      tooltip: pending ? 'Duyệt báo cáo' : 'Quản lý bình luận',
+      onSelected: (v) {
+        if (v == 'ok') _resolve(r, false);
+        if (v == 'bad') _resolve(r, true);
+        if (v == 'toggle') _toggleHidden(r);
+      },
+      itemBuilder: (_) => pending
+          ? const [
+              PopupMenuItem(
+                value: 'ok',
+                child: Row(children: [
+                  Icon(Icons.check_box, size: 18, color: _green),
+                  SizedBox(width: 10),
+                  Text('Không vi phạm', style: TextStyle(color: _green)),
+                ]),
+              ),
+              PopupMenuItem(
+                value: 'bad',
+                child: Row(children: [
+                  Icon(Icons.block, size: 18, color: _red),
+                  SizedBox(width: 10),
+                  Text('Vi phạm — ẩn bình luận', style: TextStyle(color: _red)),
+                ]),
+              ),
+            ]
+          : [
+              PopupMenuItem(
+                value: 'toggle',
+                child: Row(children: [
+                  Icon(r.commentHidden ? Icons.visibility : Icons.visibility_off,
+                      size: 18, color: r.commentHidden ? _green : _red),
+                  const SizedBox(width: 10),
+                  Text(r.commentHidden ? 'Hiện lại bình luận' : 'Ẩn bình luận',
+                      style: TextStyle(color: r.commentHidden ? _green : _red)),
+                ]),
+              ),
+            ],
+    );
+  }
 }

@@ -15,7 +15,8 @@ const List<String> kReportReasons = [
   'Khác',
 ];
 
-Future<void> showReportCommentDialog(
+/// Trả về true nếu bình luận đã được báo cáo (vừa gửi xong hoặc đã báo cáo từ trước).
+Future<bool> showReportCommentDialog(
   BuildContext context, {
   required ForumService service,
   required CommentDTO comment,
@@ -24,6 +25,7 @@ Future<void> showReportCommentDialog(
   String? selected;
   final otherCtl = TextEditingController();
   bool sending = false;
+  bool done = false;
   String? error;
 
   final messenger = ScaffoldMessenger.of(context);
@@ -114,11 +116,14 @@ Future<void> showReportCommentDialog(
                     });
                     try {
                       await service.reportComment(comment.id, reason);
+                      done = true;
                       if (ctx.mounted) Navigator.pop(ctx);
                       messenger.showSnackBar(const SnackBar(
                           content: Text('Đã gửi báo cáo. Cảm ơn bạn!')));
                     } catch (e) {
                       // Gồm cả lỗi "Bạn đã báo cáo bình luận này rồi"
+                      // Đã báo cáo từ trước (vd. ở thiết bị khác) thì cũng coi là đã báo cáo
+                      if (e.toString().contains('đã báo cáo')) done = true;
                       setD(() {
                         sending = false;
                         error = e.toString();
@@ -137,4 +142,5 @@ Future<void> showReportCommentDialog(
     ),
   );
   otherCtl.dispose();
+  return done;
 }

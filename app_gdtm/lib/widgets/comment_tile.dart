@@ -1,5 +1,5 @@
 // lib/widgets/comment_tile.dart
-// Bình luận kiểu Facebook: bong bóng xám, Thích · Phản hồi · Báo cáo · Xóa, reply thụt lề.
+// Bình luận kiểu Facebook: bong bóng xám, Thích · Phản hồi · ⋯ (menu: báo cáo / ẩn / xóa), reply thụt lề.
 import 'package:flutter/material.dart';
 import 'package:app_gdtm/models/forum_post.dart';
 import 'forum_utils.dart';
@@ -16,6 +16,15 @@ class CommentTile extends StatelessWidget {
   /// Null thì ẩn nút "Báo cáo". Chỉ hiện ở bình luận của người khác.
   final ValueChanged<CommentDTO>? onReport;
 
+  /// Id các bình luận đã báo cáo: hiện "Đã báo cáo" thay cho "Báo cáo"
+  final Set<String>? reportedIds;
+
+  /// Chỉ admin: ẩn / hiện lại bình luận. Khác null thì hiện nút "Ẩn bình luận" / "Hiện lại".
+  final ValueChanged<CommentDTO>? onToggleHidden;
+
+  /// Bình luận cha đang bị ẩn (các phản hồi bên dưới cũng hiển thị mờ cho admin)
+  final bool parentHidden;
+
   /// Id bình luận cần làm nổi bật (khi admin bấm "Xem" từ trang báo cáo)
   final String? highlightId;
 
@@ -30,10 +39,72 @@ class CommentTile extends StatelessWidget {
     required this.onDelete,
     this.onShowReactors,
     this.onReport,
+    this.reportedIds,
+    this.onToggleHidden,
+    this.parentHidden = false,
     this.highlightId,
     this.anchors,
     this.isReply = false,
   });
+
+  /// Có thao tác phụ nào để hiện trong menu ⋯ không
+  bool get _hasActions =>
+      comment.canDelete || onToggleHidden != null || onReport != null;
+
+  /// Menu thao tác phụ dạng bottom sheet (giống Facebook / Instagram trên điện thoại).
+  Future<void> _showActions(BuildContext context) async {
+    final c = comment;
+    final reported = reportedIds?.contains(c.id) ?? false;
+    const red = Color(0xFFD93025);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          // Admin: ẩn / hiện lại bình luận bất kỳ
+          if (onToggleHidden != null)
+            ListTile(
+              leading: Icon(c.isHidden ? Icons.visibility : Icons.visibility_off),
+              title: Text(c.isHidden ? 'Hiện lại bình luận' : 'Ẩn bình luận'),
+              subtitle: Text(c.isHidden
+                  ? 'Mọi người sẽ thấy lại bình luận này'
+                  : 'Chỉ quản trị viên còn thấy, ở dạng mờ'),
+              onTap: () {
+                Navigator.pop(ctx);
+                onToggleHidden!(c);
+              },
+            ),
+          // Người dùng thường: báo cáo bình luận của người khác
+          if (onReport != null && !c.canDelete)
+            ListTile(
+              enabled: !reported,
+              leading: Icon(reported ? Icons.flag : Icons.flag_outlined),
+              title: Text(reported ? 'Đã báo cáo' : 'Báo cáo bình luận'),
+              subtitle: Text(reported
+                  ? 'Bạn đã báo cáo bình luận này'
+                  : 'Báo cho quản trị viên xem xét'),
+              onTap: reported
+                  ? null
+                  : () {
+                      Navigator.pop(ctx);
+                      onReport!(c);
+                    },
+            ),
+          // Chủ bình luận: xóa
+          if (c.canDelete)
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: red),
+              title: const Text('Xóa bình luận', style: TextStyle(color: red)),
+              onTap: () {
+                Navigator.pop(ctx);
+                onDelete(c);
+              },
+            ),
+        ]),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +118,8 @@ class CommentTile extends StatelessWidget {
         ? const Color(0xFFD32F2F)
         : (c.isTeacher ? kFbBlue : null);
     final bool isFocus = highlightId != null && highlightId == c.id;
+    // Bình luận bị ẩn (chỉ admin nhận được) hiển thị mờ
+    final bool dim = c.isHidden || parentHidden;
     final Color bubbleColor = isFocus
         ? const Color(0xFFFFF4CC)
         : (c.isAdmin
@@ -58,6 +131,8 @@ class CommentTile extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       KeyedSubtree(
         key: anchors?.putIfAbsent(c.id, () => GlobalKey()),
+        child: Opacity(
+        opacity: dim ? 0.45 : 1.0,
         child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -65,7 +140,9 @@ class CommentTile extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Align(
+              GestureDetector(
+                onLongPress: _hasActions ? () => _showActions(context) : null,
+                child: Align(
                 alignment: Alignment.centerLeft,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -101,6 +178,25 @@ class CommentTile extends StatelessWidget {
                                   fontWeight: FontWeight.w600)),
                         ),
                       ],
+                      if (c.isHidden) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.visibility_off, size: 10, color: Colors.white),
+                            SizedBox(width: 3),
+                            Text('Đã ẩn',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600)),
+                          ]),
+                        ),
+                      ],
                     ]),
                     const SizedBox(height: 2),
                     Text.rich(TextSpan(children: [
@@ -114,7 +210,7 @@ class CommentTile extends StatelessWidget {
                     ]), style: const TextStyle(fontSize: 14.5, height: 1.3)),
                   ]),
                 ),
-              ),
+              )),
               Padding(
                 padding: const EdgeInsets.only(left: 12, top: 2),
                 child: Wrap(
@@ -139,33 +235,13 @@ class CommentTile extends StatelessWidget {
                                 color: kFbText2)),
                       ),
                     ),
-                    // Báo cáo: chỉ với bình luận của người khác
-                    if (onReport != null && !c.canDelete)
+                    // Các thao tác phụ (báo cáo / ẩn / xóa) gom vào menu ⋯
+                    if (_hasActions)
                       GestureDetector(
-                        onTap: () => onReport!(c),
+                        onTap: () => _showActions(context),
                         child: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 4),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(Icons.flag_outlined, size: 14, color: kFbText2),
-                            SizedBox(width: 2),
-                            Text('Báo cáo',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: kFbText2)),
-                          ]),
-                        ),
-                      ),
-                    if (c.canDelete)
-                      GestureDetector(
-                        onTap: () => onDelete(c),
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 4),
-                          child: Text('Xóa',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: kFbText2)),
+                          padding: EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                          child: Icon(Icons.more_horiz, size: 18, color: kFbText2),
                         ),
                       ),
                     GestureDetector(
@@ -182,7 +258,7 @@ class CommentTile extends StatelessWidget {
             ]),
           ),
         ]),
-      )),
+      ))),
       if (c.replies.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(left: 44),
@@ -196,6 +272,9 @@ class CommentTile extends StatelessWidget {
                       onDelete: onDelete,
                       onShowReactors: onShowReactors,
                       onReport: onReport,
+                      reportedIds: reportedIds,
+                      onToggleHidden: onToggleHidden,
+                      parentHidden: c.isHidden || parentHidden,
                       highlightId: highlightId,
                       anchors: anchors,
                     ))

@@ -22,6 +22,9 @@ class ReportItem {
   final bool commentExists;
   final String commentContent;
   final bool commentActive;
+
+  /// Bình luận đang bị admin ẩn
+  final bool commentHidden;
   final String? requestId;
 
   final String reporterId;
@@ -38,6 +41,7 @@ class ReportItem {
     this.commentExists = true,
     this.commentContent = '',
     this.commentActive = true,
+    this.commentHidden = false,
     this.requestId,
   });
 }
@@ -94,6 +98,7 @@ class CommentReportService {
         commentExists: c != null,
         commentContent: c?['content']?.toString() ?? '[Bình luận không còn tồn tại]',
         commentActive: c == null ? false : c['isActive'] != false,
+        commentHidden: c?['isHidden'] == true,
         requestId: c?['requestId']?.toString(),
         reporterId: studentId,
         reporterName: _userName(users[studentId], fallback: studentId),
@@ -105,14 +110,23 @@ class CommentReportService {
     return items;
   }
 
-  /// Admin duyệt báo cáo.
-  /// - violation = true: đánh dấu vi phạm + ẩn bình luận (isActive = false).
-  ///   Các báo cáo khác còn "đang chờ" của cùng bình luận cũng được chốt là vi phạm.
-  /// - violation = false: không vi phạm. Nếu trước đó đã bị ẩn vì vi phạm thì hiện lại.
+  /// Admin xử lý một báo cáo ĐANG CHỜ (đã xử lý rồi thì không đổi nữa — muốn đổi thì
+  /// dùng ẩn/hiện bình luận). Quyết định áp dụng cho cả bình luận, nên tất cả báo cáo
+  /// đang chờ của cùng bình luận được chốt cùng một kết quả:
+  /// - violation = true : báo cáo -> "vi phạm", bình luận bị ẩn (isHidden = true):
+  ///   người dùng khác không thấy, admin vẫn thấy ở dạng mờ.
+  /// - violation = false: báo cáo -> "không vi phạm", bình luận giữ nguyên.
   Future<void> resolve(ReportItem item, {required bool violation}) async {
     _uid; // bắt buộc đăng nhập
-    final status = violation ? ReportStatus.violation : ReportStatus.notViolation;
 
+    final fresh = await _db.collection(reportsCollection).doc(item.id).get();
+    if (!fresh.exists) throw ForumException('Báo cáo không còn tồn tại');
+    final current = fresh.data()?['status']?.toString() ?? ReportStatus.pending;
+    if (current != ReportStatus.pending) {
+      throw ForumException('Báo cáo này đã được xử lý');
+    }
+
+    final status = violation ? ReportStatus.violation : ReportStatus.notViolation;
     final same = await _db
         .collection(reportsCollection)
         .where('commentId', isEqualTo: item.commentId)
@@ -120,23 +134,14 @@ class CommentReportService {
 
     final batch = _db.batch();
     for (final d in same.docs) {
-      final isThis = d.id == item.id;
-      final isPending =
-          (d.data()['status']?.toString() ?? ReportStatus.pending) ==
-              ReportStatus.pending;
-      if (isThis || (violation && isPending)) {
-        batch.update(d.reference, {'status': status});
-      }
+      final st = d.data()['status']?.toString() ?? ReportStatus.pending;
+      if (st == ReportStatus.pending) batch.update(d.reference, {'status': status});
     }
-
-    if (item.commentExists) {
-      final commentRef =
-          _db.collection(ForumService.commentsCollection).doc(item.commentId);
-      if (violation) {
-        batch.update(commentRef, {'isActive': false});
-      } else if (item.status == ReportStatus.violation) {
-        batch.update(commentRef, {'isActive': true});
-      }
+    if (violation && item.commentExists) {
+      batch.update(
+        _db.collection(ForumService.commentsCollection).doc(item.commentId),
+        {'isHidden': true},
+      );
     }
     await batch.commit();
   }

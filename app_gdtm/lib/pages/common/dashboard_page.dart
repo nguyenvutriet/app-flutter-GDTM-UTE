@@ -194,6 +194,7 @@ class _DashboardPageState extends State<DashboardPage> {
       embedded: true, // AppShell đã có header, không vẽ AppBar riêng
       currentUserName: widget.user.fullName ?? '',
       onCompose: onCompose,
+      canReport: widget.role != UserRole.admin, // admin không báo cáo bình luận
     );
   }
 

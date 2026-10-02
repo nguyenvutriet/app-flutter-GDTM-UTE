@@ -42,6 +42,12 @@ class _PostDetailPageState extends State<PostDetailPage> {
   bool _sending = false;
   CommentDTO? _replyTo;
 
+  /// Người dùng hiện tại là admin (thấy cả bình luận bị ẩn, được ẩn/hiện bình luận)
+  bool _isAdmin = false;
+
+  /// Id các bình luận người dùng này đã báo cáo
+  final Set<String> _reported = {};
+
   final Map<String, GlobalKey> _anchors = {};
   bool _scrolled = false;
 
@@ -78,6 +84,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   Future<void> _refresh() async {
     try {
+      _isAdmin = await widget.service.isAdmin();
       final p = await widget.service.getPostDetail(widget.initialPost.id);
       if (!mounted) return;
       if (p == null) {
@@ -86,6 +93,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
         return;
       }
       _setPost(p);
+      _loadReported();
       _scrollToFocus();
     } catch (e) {
       _snack(e.toString());
@@ -169,9 +177,49 @@ class _PostDetailPageState extends State<PostDetailPage> {
     _focus.requestFocus();
   }
 
+  /// Tải danh sách bình luận đã báo cáo (để hiện "Đã báo cáo"). Lỗi thì bỏ qua.
+  Future<void> _loadReported() async {
+    if (!widget.canReport || _isAdmin) return;
+    try {
+      final ids = await widget.service.getMyReportedCommentIds();
+      if (mounted) setState(() => _reported.addAll(ids));
+    } catch (_) {}
+  }
+
   /// Báo cáo bình luận vi phạm (mỗi người chỉ báo cáo 1 bình luận được 1 lần).
-  void _reportComment(CommentDTO c) =>
-      showReportCommentDialog(context, service: widget.service, comment: c);
+  Future<void> _reportComment(CommentDTO c) async {
+    final reported = await showReportCommentDialog(
+        context, service: widget.service, comment: c);
+    if (reported && mounted) setState(() => _reported.add(c.id));
+  }
+
+  /// Admin ẩn / hiện lại bình luận.
+  Future<void> _toggleHidden(CommentDTO c) async {
+    final hide = !c.isHidden;
+    if (hide) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Ẩn bình luận?'),
+          content: const Text(
+              'Bình luận (và các phản hồi bên dưới) sẽ không còn hiển thị với người dùng khác. '
+              'Bạn vẫn thấy ở dạng mờ và có thể hiện lại bất cứ lúc nào.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ẩn')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    try {
+      await widget.service.setCommentHidden(c.id, hidden: hide);
+      await _reloadComments();
+      _snack(hide ? 'Đã ẩn bình luận' : 'Đã hiện lại bình luận');
+    } catch (e) {
+      _snack(e.toString());
+    }
+  }
 
   Future<void> _deleteComment(CommentDTO c) async {
     final ok = await showDialog<bool>(
@@ -260,7 +308,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         onReact: _reactComment,
                         onReply: _startReply,
                         onDelete: _deleteComment,
-                        onReport: widget.canReport ? _reportComment : null,
+                        onReport: (widget.canReport && !_isAdmin) ? _reportComment : null,
+                        reportedIds: _reported,
+                        onToggleHidden: _isAdmin ? _toggleHidden : null,
                         highlightId: widget.focusCommentId,
                         anchors: _anchors,
                         onShowReactors: (c) => showReactorsSheet(

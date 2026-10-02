@@ -53,6 +53,18 @@ class ForumService {
     return id;
   }
 
+  // Cache vai trò admin của người đang đăng nhập (mỗi lần đăng nhập là 1 service mới)
+  bool? _adminCache;
+
+  /// Người dùng hiện tại có phải quản trị viên không.
+  Future<bool> isAdmin() async {
+    final cached = _adminCache;
+    if (cached != null) return cached;
+    final uid = _uid;
+    final me = (await _loadUsers({uid}))[uid];
+    return _adminCache = _userRole(me).toUpperCase().contains('ADMIN');
+  }
+
   // Cache danh mục / phòng ban (ít thay đổi)
   Map<String, String>? _departmentNames;
   Map<String, String>? _categoryNames;
@@ -180,7 +192,7 @@ class ForumService {
         .collection(commentsCollection)
         .where('requestId', isEqualTo: postId)
         .get();
-    return _commentTree(snap.docs, uid);
+    return _commentTree(snap.docs, uid, await isAdmin());
   }
 
   /// Thêm bình luận. Truyền [replyTo] để trả lời một bình luận:
@@ -259,8 +271,7 @@ class ForumService {
   Future<void> reportComment(String commentId, String reason) async {
     final uid = _uid;
 
-    final me = (await _loadUsers({uid}))[uid];
-    if (_userRole(me).toUpperCase().contains('ADMIN')) {
+    if (await isAdmin()) {
       throw ForumException('Quản trị viên không thể báo cáo bình luận');
     }
 
@@ -286,6 +297,52 @@ class ForumService {
         'createdAt': Timestamp.now(),
       });
     });
+  }
+
+  /// Admin ẩn / hiện lại một bình luận bất kỳ (không cần có báo cáo).
+  /// - Ẩn (isHidden = true): mọi người dùng khác không còn thấy bình luận (và các phản hồi
+  ///   của nó); admin vẫn thấy ở dạng mờ. Các báo cáo đang chờ của bình luận được chốt
+  ///   là "vi phạm".
+  /// - Hiện lại (isHidden = false): bình luận hiển thị bình thường. Các báo cáo đã chốt
+  ///   "vi phạm" của nó chuyển thành "không vi phạm" (admin đã xem xét lại).
+  /// Khác với xóa (isActive = false, do chính chủ xóa) nên hai trạng thái không lẫn nhau.
+  Future<void> setCommentHidden(String commentId, {required bool hidden}) async {
+    if (!await isAdmin()) {
+      throw ForumException('Chỉ quản trị viên mới được ẩn/hiện bình luận');
+    }
+    final ref = _db.collection(commentsCollection).doc(commentId);
+    final doc = await ref.get();
+    if (!doc.exists) throw ForumException('Bình luận không còn tồn tại');
+
+    final reports = await _db
+        .collection(commentReportsCollection)
+        .where('commentId', isEqualTo: commentId)
+        .get();
+
+    final batch = _db.batch();
+    batch.update(ref, {'isHidden': hidden});
+    for (final r in reports.docs) {
+      final st = r.data()['status']?.toString() ?? 'pending';
+      if (hidden && st == 'pending') {
+        batch.update(r.reference, {'status': 'violation'});
+      } else if (!hidden && st == 'violation') {
+        batch.update(r.reference, {'status': 'not_violation'});
+      }
+    }
+    await batch.commit();
+  }
+
+  /// Id các bình luận mà người dùng hiện tại đã báo cáo (để hiện "Đã báo cáo").
+  Future<Set<String>> getMyReportedCommentIds() async {
+    final uid = _uid;
+    final snap = await _db
+        .collection(commentReportsCollection)
+        .where('studentId', isEqualTo: uid)
+        .get();
+    return snap.docs
+        .map((d) => d.data()['commentId']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet();
   }
 
   /// Reaction cho bình luận (VoteComment). Doc id = "{userId}_{commentId}".
@@ -394,11 +451,15 @@ class ForumService {
 
     final votesBy = _groupBy(await votesF, 'requestId');
     final commentDocs = await commentsF;
-    final commentsBy = _groupBy(commentDocs, 'requestId');
     final attachBy = _groupBy(await attachF, 'requestId');
     final users = await usersF;
 
-    final tree = withComments ? await _commentTree(commentDocs, uid) : <CommentDTO>[];
+    final admin = await isAdmin();
+    // Số bình luận hiển thị: người thường không đếm bình luận bị ẩn
+    final visibleBy = _groupBy(_visibleComments(commentDocs, admin), 'requestId');
+
+    final tree =
+        withComments ? await _commentTree(commentDocs, uid, admin) : <CommentDTO>[];
 
     return docs.map((d) {
       final m = d.data() ?? {};
@@ -412,7 +473,7 @@ class ForumService {
         }
       }
 
-      final activeComments = (commentsBy[d.id] ?? const []).where(_isActive).length;
+      final activeComments = (visibleBy[d.id] ?? const []).length;
 
       return ForumPostDTO(
         id: d.id,
@@ -444,8 +505,9 @@ class ForumService {
   Future<List<CommentDTO>> _commentTree(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
     String uid,
+    bool admin,
   ) async {
-    final active = docs.where((d) => _isActive(d.data())).toList();
+    final active = _visibleComments(docs, admin);
     if (active.isEmpty) return [];
 
     final ids = active.map((d) => d.id).toList();
@@ -481,6 +543,7 @@ class ForumService {
         replyToUsername: m['replyToUsername']?.toString(),
         reactions: countReactions(votes.map((v) => v['reactionType'])),
         reactionType: mine,
+        isHidden: _isHidden(m),
       );
     }
 
@@ -580,7 +643,33 @@ class ForumService {
 
   // ---------------- Tiện ích ----------------
 
+  /// isActive = false: bình luận đã bị chính chủ xóa.
   bool _isActive(Map<String, dynamic> m) => m['isActive'] != false;
+
+  /// isHidden = true: bị admin ẩn vì vi phạm.
+  bool _isHidden(Map<String, dynamic> m) => m['isHidden'] == true;
+
+  /// Bình luận mà người dùng được phép thấy:
+  /// - bỏ bình luận đã xóa;
+  /// - người thường: bỏ thêm bình luận bị ẩn và các phản hồi nằm dưới bình luận bị ẩn;
+  /// - admin: thấy cả bình luận bị ẩn (UI hiển thị mờ).
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _visibleComments(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    bool admin,
+  ) {
+    final active = docs.where((d) => _isActive(d.data())).toList();
+    if (admin) return active;
+
+    final hiddenIds =
+        active.where((d) => _isHidden(d.data())).map((d) => d.id).toSet();
+    return active.where((d) {
+      final m = d.data();
+      if (_isHidden(m)) return false;
+      final parent = m['parentId']?.toString() ?? '';
+      final replyTo = m['replyId']?.toString() ?? '';
+      return !hiddenIds.contains(parent) && !hiddenIds.contains(replyTo);
+    }).toList();
+  }
 
   String _userName(Map<String, dynamic>? u) {
     final n = u?['fullName'] ??
