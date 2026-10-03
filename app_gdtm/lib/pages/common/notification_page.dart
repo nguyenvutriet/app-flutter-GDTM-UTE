@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
+
+import 'package:app_gdtm/models/announcement_item.dart';
+import 'package:app_gdtm/pages/common/announcement_detail_page.dart';
+import 'package:app_gdtm/services/announcement_service.dart';
+import 'package:app_gdtm/widgets/announcement_card.dart';
 import 'package:app_gdtm/widgets/app_colors.dart';
 
 /// Trang "Thông báo": tiêu đề + tab Thông báo chung / cá nhân.
-/// Phần nội dung của từng tab để trống, làm sau.
+/// Tab "Thông báo chung" hiển thị thông báo do giảng viên đăng (mọi role xem được).
+/// Tab "Thông báo cá nhân" để trống, làm sau.
 class NotificationPage extends StatefulWidget {
-  const NotificationPage({super.key});
+  final AnnouncementService service;
+
+  const NotificationPage({super.key, required this.service});
 
   @override
   State<NotificationPage> createState() => _NotificationPageState();
@@ -12,19 +20,80 @@ class NotificationPage extends StatefulWidget {
 
 class _NotificationPageState extends State<NotificationPage> {
   int _tab = 0;
+  late Future<List<AnnouncementItem>> _future = widget.service.getAnnouncements();
+
+  void _reload() {
+    setState(() {
+      _future = widget.service.getAnnouncements();
+    });
+  }
+
+  void _open(AnnouncementItem item) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => AnnouncementDetailPage(item: item)),
+    );
+  }
 
   /// Nội dung theo tab đang chọn.
   Widget _buildTabContent() {
     switch (_tab) {
       case 0:
-        // TODO: nội dung tab "Thông báo chung"
-        return const SizedBox.shrink();
+        return _buildGeneral();
       case 1:
         // TODO: nội dung tab "Thông báo cá nhân"
         return const SizedBox.shrink();
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  Widget _buildGeneral() {
+    return FutureBuilder<List<AnnouncementItem>>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snap.hasError) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Column(children: [
+              Text(snap.error.toString(),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red)),
+              TextButton(onPressed: _reload, child: const Text('Thử lại')),
+            ]),
+          );
+        }
+
+        final items = snap.data ?? [];
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _reload,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Làm mới'),
+            ),
+          ),
+          if (items.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(
+                child: Text('Chưa có thông báo nào',
+                    style: TextStyle(color: Colors.black54)),
+              ),
+            )
+          else
+            for (final item in items)
+              AnnouncementCard(item: item, onTap: () => _open(item)),
+        ]);
+      },
+    );
   }
 
   @override

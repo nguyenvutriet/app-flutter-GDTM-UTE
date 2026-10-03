@@ -12,11 +12,13 @@ import 'package:app_gdtm/pages/common/notification_page.dart';
 import 'package:app_gdtm/pages/login/login_page.dart';
 import 'package:app_gdtm/services/AuthService.dart';
 import 'package:app_gdtm/services/forum_service.dart';
+import 'package:app_gdtm/services/announcement_service.dart';
 import 'package:app_gdtm/services/CategoryService.dart';
 import 'package:app_gdtm/pages/student/send_feedback_page.dart';
 import 'package:app_gdtm/pages/student/feedback_history_page.dart';
 import 'package:app_gdtm/pages/student/feedback_detail_page.dart';
 import 'package:app_gdtm/pages/student/forum_page.dart';
+import 'package:app_gdtm/pages/staff/manage_notifications_page.dart';
 import 'package:app_gdtm/pages/common/change_password_page.dart';
 import 'package:app_gdtm/pages/admin/category_management_page.dart';
 import 'package:app_gdtm/services/comment_report_service.dart';
@@ -52,6 +54,11 @@ class _DashboardPageState extends State<DashboardPage> {
 
   /// Service diễn đàn (dùng chung cho mọi role). Users.id là userId lưu trên Firestore.
   late final ForumService _forum = ForumService(
+    currentUserId: () => widget.user.id,
+  );
+
+  /// Service thông báo (xem: mọi role; đăng: giảng viên).
+  late final AnnouncementService _announcements = AnnouncementService(
     currentUserId: () => widget.user.id,
   );
 
@@ -198,6 +205,9 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  /// Trang thông báo dùng chung cho mọi role (tab "Thông báo chung" xem thông báo giảng viên đăng).
+  Widget _notificationPage() => NotificationPage(service: _announcements);
+
   /// Trang đổi mật khẩu dùng chung cho mọi role.
   /// Đổi xong quay về trang chủ (mục "Thông báo" - mục mở sẵn sau khi đăng nhập).
   Widget _changePasswordPage() {
@@ -240,7 +250,7 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
             );
           case 'notifications':
-            return const NotificationPage();
+            return _notificationPage();
           case 'send_feedback':
             return SendFeedbackPage(
               user: widget.user,
@@ -262,7 +272,9 @@ class _DashboardPageState extends State<DashboardPage> {
       case UserRole.staff:
         switch (_selectedId) {
           case 'notifications':
-            return const NotificationPage();
+            return _notificationPage();
+          case 'manage_notifications':
+            return ManageNotificationsPage(service: _announcements);
           case 'forum':
             return _forumPage();
 
@@ -277,11 +289,11 @@ class _DashboardPageState extends State<DashboardPage> {
       case UserRole.admin:
         switch (_selectedId) {
           case 'notifications':
-            return const NotificationPage();
+            return _notificationPage();
           case 'forum':
             return _forumPage();
           // TODO: case 'manage_categories': return const CategoriesPage();
-          
+
           case 'change_password':
             return _changePasswordPage();
 
@@ -291,7 +303,7 @@ class _DashboardPageState extends State<DashboardPage> {
               forum: _forum,
               embedded: true,
             );
-            
+
           case 'manage_categories':
             return CategoryManagementPage(
               service: _categoryService,
