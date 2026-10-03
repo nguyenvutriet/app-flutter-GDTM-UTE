@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:app_gdtm/models/forum_post.dart';
 import 'forum_utils.dart';
+import 'post_link.dart';
 import 'reaction_button.dart';
 
 class PostCard extends StatelessWidget {
@@ -76,6 +77,7 @@ class PostCard extends StatelessWidget {
         // Nội dung
         InkWell(
           onTap: onOpen,
+          onLongPress: () => PostLink.copy(context, post.id), // nhấn giữ = sao chép link
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -83,10 +85,19 @@ class PostCard extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
               if (post.description.isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(post.description,
-                    maxLines: expanded ? null : 5,
-                    overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 15, height: 1.35)),
+                expanded
+                    // Trang chi tiết: link bài viết hiện thành thẻ xem trước
+                    ? LinkifiedContent(
+                        text: post.description,
+                        style: const TextStyle(fontSize: 15, height: 1.35),
+                      )
+                    // Bảng tin: giữ gọn, link hiện thành "Xem bài viết"
+                    : Text.rich(
+                        TextSpan(children: linkifySpans(context, post.description)),
+                        maxLines: 5,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 15, height: 1.35),
+                      ),
               ],
               if (post.categories.isNotEmpty) ...[
                 const SizedBox(height: 6),
@@ -181,6 +192,21 @@ class PostCard extends StatelessWidget {
                   Icon(Icons.chat_bubble_outline, size: 20, color: kFbText2),
                   SizedBox(width: 6),
                   Text('Bình luận',
+                      style: TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w600, color: kFbText2)),
+                ]),
+              ),
+            ),
+          ),
+          Expanded(
+            child: InkWell(
+              onTap: () => PostLink.copy(context, post.id),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.link, size: 20, color: kFbText2),
+                  SizedBox(width: 6),
+                  Text('Sao chép',
                       style: TextStyle(
                           fontSize: 14, fontWeight: FontWeight.w600, color: kFbText2)),
                 ]),

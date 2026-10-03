@@ -8,6 +8,7 @@ import 'package:app_gdtm/models/Users.dart';
 import 'package:app_gdtm/widgets/app_colors.dart';
 import 'package:app_gdtm/widgets/app_menu.dart';
 import 'package:app_gdtm/widgets/app_shell.dart';
+import 'package:app_gdtm/widgets/post_link.dart';
 import 'package:app_gdtm/pages/common/notification_page.dart';
 import 'package:app_gdtm/pages/login/login_page.dart';
 import 'package:app_gdtm/services/AuthService.dart';
@@ -18,6 +19,7 @@ import 'package:app_gdtm/pages/student/send_feedback_page.dart';
 import 'package:app_gdtm/pages/student/feedback_history_page.dart';
 import 'package:app_gdtm/pages/student/feedback_detail_page.dart';
 import 'package:app_gdtm/pages/student/forum_page.dart';
+import 'package:app_gdtm/pages/student/post_detail_page.dart';
 import 'package:app_gdtm/pages/staff/manage_notifications_page.dart';
 import 'package:app_gdtm/pages/common/change_password_page.dart';
 import 'package:app_gdtm/pages/admin/category_management_page.dart';
@@ -69,6 +71,45 @@ class _DashboardPageState extends State<DashboardPage> {
   late final CommentReportService _reportService = CommentReportService(
     currentUserId: () => widget.user.id,
   );
+
+  // ============================================================
+  // LIÊN KẾT BÀI VIẾT
+  // ============================================================
+
+  @override
+  void initState() {
+    super.initState();
+    // Link bài viết (trong bình luận, nội dung bài...) mở trang chi tiết qua hàm này
+    PostLink.openHandler = _openPostById;
+    // Nếu người dùng vào app bằng link bài viết (web) thì mở bài đó sau khi đăng nhập
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final id = PostLink.consumeInitialPostId();
+      if (id != null && mounted) _openPostById(id);
+    });
+  }
+
+  @override
+  void dispose() {
+    PostLink.openHandler = null;
+    super.dispose();
+  }
+
+  /// Mở trang chi tiết bài viết theo id (chỉ bài công khai).
+  Future<void> _openPostById(String postId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final post = await fetchPublicPost(_forum, postId);
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PostDetailPage(initialPost: post, service: _forum),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
 
   /// Mục "Đăng xuất" ghim ở đáy menu, dùng chung mọi role.
   static const AppMenuItem _logoutItem = AppMenuItem(

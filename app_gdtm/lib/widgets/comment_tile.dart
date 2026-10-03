@@ -1,8 +1,10 @@
 // lib/widgets/comment_tile.dart
 // Bình luận kiểu Facebook: bong bóng xám, Thích · Phản hồi · ⋯ (menu: báo cáo / ẩn / xóa), reply thụt lề.
+// Link bài viết trong nội dung hiện thành thẻ xem trước (PostLinkCard).
 import 'package:flutter/material.dart';
 import 'package:app_gdtm/models/forum_post.dart';
 import 'forum_utils.dart';
+import 'post_link.dart';
 import 'reaction_button.dart';
 
 class CommentTile extends StatelessWidget {
@@ -199,15 +201,12 @@ class CommentTile extends StatelessWidget {
                       ],
                     ]),
                     const SizedBox(height: 2),
-                    Text.rich(TextSpan(children: [
-                      if (showMention)
-                        TextSpan(
-                          text: '${c.replyToUsername} ',
-                          style: const TextStyle(
-                              color: kFbBlue, fontWeight: FontWeight.w600),
-                        ),
-                      TextSpan(text: c.content),
-                    ]), style: const TextStyle(fontSize: 14.5, height: 1.3)),
+                    // Nội dung: link bài viết hiện thành thẻ xem trước
+                    LinkifiedContent(
+                      text: c.content,
+                      prefix: showMention ? '${c.replyToUsername} ' : null,
+                      style: const TextStyle(fontSize: 14.5, height: 1.3),
+                    ),
                   ]),
                 ),
               )),
