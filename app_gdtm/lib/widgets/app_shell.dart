@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:app_gdtm/models/Notification.dart' as app_notification;
 import 'package:app_gdtm/models/Users.dart';
+import 'package:app_gdtm/models/enums/user_role.dart';
+import 'package:app_gdtm/services/NotificationService.dart';
 import 'package:app_gdtm/widgets/app_colors.dart';
 import 'package:app_gdtm/widgets/app_menu.dart';
 
@@ -19,6 +22,8 @@ class AppShell extends StatefulWidget {
   final String selectedMenuId;
   final ValueChanged<String> onMenuSelected;
   final Widget child;
+  final ValueChanged<app_notification.Notification>? onNotificationSelected;
+  final ValueNotifier<app_notification.Notification?>? notificationReadNotifier;
 
   /// Người dùng đang đăng nhập.
   final Users user;
@@ -31,6 +36,8 @@ class AppShell extends StatefulWidget {
     required this.onMenuSelected,
     required this.child,
     required this.user,
+    this.onNotificationSelected,
+    this.notificationReadNotifier,
   });
 
   static const double desktopBreakpoint = 900;
@@ -41,17 +48,81 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  final GlobalKey<ScaffoldState> _scaffoldKey =
-      GlobalKey<ScaffoldState>();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   /// Chỉ sử dụng cho laptop/tablet ngang.
   bool _sidebarOpen = true;
+  int _notificationCount = 0;
+  List<app_notification.Notification> _unreadNotifications = [];
+  final _notificationService = NotificationService();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.notificationReadNotifier?.addListener(_onNotificationReadChanged);
+    _loadNotificationCount();
+  }
+
+  @override
+  void didUpdateWidget(covariant AppShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.notificationReadNotifier !=
+        widget.notificationReadNotifier) {
+      oldWidget.notificationReadNotifier?.removeListener(
+        _onNotificationReadChanged,
+      );
+      widget.notificationReadNotifier?.addListener(_onNotificationReadChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.notificationReadNotifier?.removeListener(_onNotificationReadChanged);
+    super.dispose();
+  }
+
+  Future<void> _loadNotificationCount() async {
+    final role = UserRoleX.fromString(widget.user.role);
+    final isDepartmentUser = role == UserRole.staff || role == UserRole.admin;
+    final notifications = await _notificationService.getNotifications(
+      userId: isDepartmentUser ? null : widget.user.id,
+      departmentId: isDepartmentUser ? widget.user.departmentId : null,
+    );
+    final unread = notifications
+        .where((notification) => notification.isRead != true)
+        .toList();
+    if (!mounted) return;
+    setState(() {
+      _unreadNotifications = unread;
+      _notificationCount = unread.length;
+    });
+  }
+
+  void _onNotificationReadChanged(
+  ) {
+    final notification = widget.notificationReadNotifier?.value;
+    if (notification == null || !mounted) return;
+    setState(() {
+      if (notification.isRead == true) {
+        _unreadNotifications = _unreadNotifications
+            .where((item) => item.id != notification.id)
+            .toList();
+      } else if (!_unreadNotifications.any(
+        (item) => item.id == notification.id,
+      )) {
+        _unreadNotifications = [
+          ..._unreadNotifications,
+          notification,
+        ];
+      }
+      _notificationCount = _unreadNotifications.length;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDesktop =
-        MediaQuery.of(context).size.width >=
-            AppShell.desktopBreakpoint;
+        MediaQuery.of(context).size.width >= AppShell.desktopBreakpoint;
 
     // ============================================================
     // MENU
@@ -88,7 +159,6 @@ class _AppShellState extends State<AppShell> {
       // ==========================================================
       // DRAWER - MOBILE
       // ==========================================================
-
       drawer: isDesktop
           ? null
           : Drawer(
@@ -101,7 +171,6 @@ class _AppShellState extends State<AppShell> {
       // ==========================================================
       // BODY
       // ==========================================================
-
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -111,13 +180,9 @@ class _AppShellState extends State<AppShell> {
 
           if (isDesktop)
             AnimatedContainer(
-              duration: const Duration(
-                milliseconds: 200,
-              ),
+              duration: const Duration(milliseconds: 200),
 
-              width: _sidebarOpen
-                  ? AppShell.sidebarWidth
-                  : 0,
+              width: _sidebarOpen ? AppShell.sidebarWidth : 0,
 
               child: ClipRect(
                 child: OverflowBox(
@@ -134,7 +199,6 @@ class _AppShellState extends State<AppShell> {
           // ========================================================
           // NỘI DUNG CHÍNH
           // ========================================================
-
           Expanded(
             child: Column(
               children: [
@@ -144,6 +208,25 @@ class _AppShellState extends State<AppShell> {
 
                 AppHeader(
                   user: widget.user,
+                  notificationCount: _notificationCount,
+                  unreadNotifications: _unreadNotifications,
+                  onNotificationSelected: widget.onNotificationSelected == null
+                      ? null
+                      : (notification) async {
+                          final id = notification.id;
+                          if (id == null || id.isEmpty) return;
+                          setState(() {
+                            _unreadNotifications = _unreadNotifications
+                                .where((item) => item.id != id)
+                                .toList();
+                            _notificationCount = _unreadNotifications.length;
+                          });
+                          widget.onNotificationSelected!(notification);
+                          await _notificationService.setNotificationRead(
+                            id,
+                            true,
+                          );
+                        },
 
                   onMenuPressed: () {
                     if (isDesktop) {
@@ -163,10 +246,7 @@ class _AppShellState extends State<AppShell> {
                 // --------------------------------------------------
                 // PAGE CONTENT
                 // --------------------------------------------------
-
-                Expanded(
-                  child: widget.child,
-                ),
+                Expanded(child: widget.child),
               ],
             ),
           ),
@@ -193,12 +273,16 @@ class AppHeader extends StatelessWidget {
 
   /// Người dùng đang đăng nhập.
   final Users user;
+  final List<app_notification.Notification> unreadNotifications;
+  final ValueChanged<app_notification.Notification>? onNotificationSelected;
 
   const AppHeader({
     super.key,
     required this.onMenuPressed,
     required this.user,
-    this.notificationCount = 7,
+    this.unreadNotifications = const [],
+    this.onNotificationSelected,
+    this.notificationCount = 0,
   });
 
   @override
@@ -214,9 +298,7 @@ class AppHeader extends StatelessWidget {
           height: 60,
 
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
 
             child: Row(
               children: [
@@ -227,10 +309,7 @@ class AppHeader extends StatelessWidget {
                 IconButton(
                   onPressed: onMenuPressed,
 
-                  icon: const Icon(
-                    Icons.menu,
-                    color: Colors.white,
-                  ),
+                  icon: const Icon(Icons.menu, color: Colors.white),
                 ),
 
                 const Spacer(),
@@ -238,14 +317,11 @@ class AppHeader extends StatelessWidget {
                 // ==================================================
                 // CỜ VIỆT NAM
                 // ==================================================
-
                 Container(
                   width: 22,
                   height: 15,
 
-                  color: const Color(
-                    0xFFDA251D,
-                  ),
+                  color: const Color(0xFFDA251D),
 
                   alignment: Alignment.center,
 
@@ -261,49 +337,89 @@ class AppHeader extends StatelessWidget {
                 // ==================================================
                 // THÔNG BÁO
                 // ==================================================
-
-                Stack(
-                  clipBehavior: Clip.none,
-
+                Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(
-                      onPressed: () {},
-
-                      icon: const Icon(
-                        Icons.notifications_none,
-                        color: Colors.white,
+                    PopupMenuButton<app_notification.Notification>(
+                      onSelected: onNotificationSelected,
+                      tooltip: 'Thông báo chưa xem',
+                      color: Colors.white,
+                      itemBuilder: (context) {
+                        if (unreadNotifications.isEmpty) {
+                          return const [
+                            PopupMenuItem(
+                              enabled: false,
+                              child: Text('Không có thông báo mới'),
+                            ),
+                          ];
+                        }
+                        return unreadNotifications
+                            .take(6)
+                            .map(
+                              (notification) =>
+                                  PopupMenuItem<app_notification.Notification>(
+                                    value: notification,
+                                    child: SizedBox(
+                                      width: 300,
+                                      child: ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        leading: Icon(
+                                          Icons.notifications_active,
+                                          color: AppColors.primary,
+                                        ),
+                                        title: Text(
+                                          notification.title ?? 'Thông báo',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        subtitle: Text(
+                                          notification.content ?? '',
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                            )
+                            .toList();
+                      },
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Icon(
+                            Icons.notifications_none,
+                            color: Colors.white,
+                          ),
+                          if (notificationCount > 0)
+                            Positioned(
+                              right: -1,
+                              top: -1,
+                              child: Container(
+                                width: 9,
+                                height: 9,
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: AppColors.primary,
+                                    width: 1,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-
                     if (notificationCount > 0)
-                      Positioned(
-                        right: 2,
-                        top: 2,
-
-                        child: Container(
-                          padding:
-                              const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 1,
-                          ),
-
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius:
-                                BorderRadius.circular(10),
-                          ),
-
-                          child: Text(
-                            '$notificationCount',
-
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                      Text(
+                        '$notificationCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
+                    const SizedBox(width: 8),
                   ],
                 ),
 
@@ -312,7 +428,6 @@ class AppHeader extends StatelessWidget {
                 // ==================================================
                 // AVATAR
                 // ==================================================
-
                 Tooltip(
                   message: user.fullName ?? 'Người dùng',
 
@@ -321,10 +436,7 @@ class AppHeader extends StatelessWidget {
 
                     backgroundColor: Colors.white,
 
-                    child: Icon(
-                      Icons.person,
-                      color: AppColors.primary,
-                    ),
+                    child: Icon(Icons.person, color: AppColors.primary),
                   ),
                 ),
 

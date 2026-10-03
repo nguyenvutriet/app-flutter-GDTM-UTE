@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:app_gdtm/models/enums/user_role.dart';
+import 'package:app_gdtm/models/Notification.dart' as app_notification;
 import 'package:app_gdtm/models/Category.dart';
 import 'package:app_gdtm/models/Department.dart';
 import 'package:app_gdtm/models/Request.dart';
@@ -13,6 +14,7 @@ import 'package:app_gdtm/pages/login/login_page.dart';
 import 'package:app_gdtm/services/AuthService.dart';
 import 'package:app_gdtm/services/forum_service.dart';
 import 'package:app_gdtm/pages/student/send_feedback_page.dart';
+import 'package:app_gdtm/pages/student/edit_feedback_page.dart';
 import 'package:app_gdtm/pages/student/feedback_history_page.dart';
 import 'package:app_gdtm/pages/student/feedback_detail_page.dart';
 import 'package:app_gdtm/pages/student/forum_page.dart';
@@ -26,11 +28,7 @@ class DashboardPage extends StatefulWidget {
   /// Thông tin người dùng vừa đăng nhập.
   final Users user;
 
-  const DashboardPage({
-    super.key,
-    required this.role,
-    required this.user,
-  });
+  const DashboardPage({super.key, required this.role, required this.user});
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -44,6 +42,10 @@ class _DashboardPageState extends State<DashboardPage> {
   Request? _selectedFeedback;
   List<Department> _feedbackDepartments = [];
   List<Category> _feedbackCategories = [];
+  app_notification.Notification? _initialNotification;
+  final ValueNotifier<app_notification.Notification?>
+  _notificationReadNotifier = ValueNotifier(null);
+  String _feedbackBackId = 'feedback_history';
 
   /// Service diễn đàn (dùng chung cho mọi role). Users.id là userId lưu trên Firestore.
   late final ForumService _forum = ForumService(
@@ -75,11 +77,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 title: 'Gửi góp ý',
                 icon: Icons.edit,
               ),
-              AppMenuItem(
-                id: 'forum',
-                title: 'Diễn đàn',
-                icon: Icons.forum,
-              ),
+              AppMenuItem(id: 'forum', title: 'Diễn đàn', icon: Icons.forum),
               AppMenuItem(
                 id: 'notifications',
                 title: 'Thông báo',
@@ -104,11 +102,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 title: 'Góp ý tiếp nhận',
                 icon: Icons.inbox,
               ),
-              AppMenuItem(
-                id: 'forum',
-                title: 'Diễn đàn',
-                icon: Icons.forum,
-              ),
+              AppMenuItem(id: 'forum', title: 'Diễn đàn', icon: Icons.forum),
               AppMenuItem(
                 id: 'manage_notifications',
                 title: 'Quản lý thông báo',
@@ -193,11 +187,13 @@ class _DashboardPageState extends State<DashboardPage> {
           case 'feedback_history':
             return FeedbackHistoryPage(
               user: widget.user,
+              onEditRequest: _openEditFeedback,
               onOpenDetail: (request, departments, categories) {
                 setState(() {
                   _selectedFeedback = request;
                   _feedbackDepartments = departments;
                   _feedbackCategories = categories;
+                  _feedbackBackId = 'feedback_history';
                   _selectedId = 'feedback_detail';
                 });
               },
@@ -212,17 +208,35 @@ class _DashboardPageState extends State<DashboardPage> {
               user: widget.user,
               departments: _feedbackDepartments,
               categories: _feedbackCategories,
-              onBack: () => setState(
-                () => _selectedId = 'feedback_history',
-              ),
+              onBack: () => setState(() => _selectedId = _feedbackBackId),
+            );
+          case 'feedback_edit':
+            final request = _selectedFeedback;
+            if (request == null) {
+              return FeedbackHistoryPage(
+                user: widget.user,
+                onEditRequest: _openEditFeedback,
+              );
+            }
+            return EditFeedbackPage(
+              user: widget.user,
+              request: request,
+              onSaved: _finishEditFeedback,
+              onCancel: _closeEditFeedback,
             );
           case 'notifications':
-            return const NotificationPage();
+            return NotificationPage(
+              user: widget.user,
+              initialNotification: _initialNotification,
+              onOpenFeedback: _openFeedbackFromNotification,
+              onReadChanged: _onNotificationReadChanged,
+            );
           case 'send_feedback':
             return SendFeedbackPage(
               user: widget.user,
               // Gửi xong thì chuyển sang "Lịch sử góp ý" (khi trang đó làm xong)
-              onSubmitted: () => setState(() => _selectedId = 'feedback_history'),
+              onSubmitted: () =>
+                  setState(() => _selectedId = 'feedback_history'),
             );
           case 'forum':
             return _forumPage(
@@ -235,7 +249,12 @@ class _DashboardPageState extends State<DashboardPage> {
       case UserRole.staff:
         switch (_selectedId) {
           case 'notifications':
-            return const NotificationPage();
+            return NotificationPage(
+              user: widget.user,
+              initialNotification: _initialNotification,
+              onOpenFeedback: _openFeedbackFromNotification,
+              onReadChanged: _onNotificationReadChanged,
+            );
           case 'forum':
             return _forumPage();
           // TODO: case 'statistics': return const StatisticsPage();
@@ -246,7 +265,12 @@ class _DashboardPageState extends State<DashboardPage> {
       case UserRole.admin:
         switch (_selectedId) {
           case 'notifications':
-            return const NotificationPage();
+            return NotificationPage(
+              user: widget.user,
+              initialNotification: _initialNotification,
+              onOpenFeedback: _openFeedbackFromNotification,
+              onReadChanged: _onNotificationReadChanged,
+            );
           case 'forum':
             return _forumPage();
           // TODO: case 'manage_categories': return const CategoriesPage();
@@ -276,7 +300,54 @@ class _DashboardPageState extends State<DashboardPage> {
       );
       return;
     }
-    setState(() => _selectedId = id);
+    setState(() {
+      _selectedId = id;
+      if (id != 'notifications') _initialNotification = null;
+    });
+  }
+
+  void _onNotificationSelected(app_notification.Notification notification) {
+    setState(() {
+      _initialNotification = notification;
+      _selectedId = 'notifications';
+    });
+  }
+
+  void _openFeedbackFromNotification(Request request) {
+    setState(() {
+      _selectedFeedback = request;
+      _feedbackDepartments = [];
+      _feedbackCategories = [];
+      _feedbackBackId = 'notifications';
+      _initialNotification = null;
+      _selectedId = 'feedback_detail';
+    });
+  }
+
+  void _openEditFeedback(Request request) {
+    setState(() {
+      _selectedFeedback = request;
+      _feedbackBackId = 'feedback_history';
+      _selectedId = 'feedback_edit';
+    });
+  }
+
+  void _finishEditFeedback() {
+    setState(() => _selectedId = 'feedback_history');
+  }
+
+  void _closeEditFeedback() {
+    setState(() => _selectedId = _feedbackBackId);
+  }
+
+  void _onNotificationReadChanged(app_notification.Notification notification) {
+    _notificationReadNotifier.value = notification.copyWith();
+  }
+
+  @override
+  void dispose() {
+    _notificationReadNotifier.dispose();
+    super.dispose();
   }
 
   @override
@@ -284,13 +355,13 @@ class _DashboardPageState extends State<DashboardPage> {
     return AppShell(
       sections: _menuSections,
 
-      footerItems: const [
-        _logoutItem,
-      ],
+      footerItems: const [_logoutItem],
 
       selectedMenuId: _selectedId,
 
       onMenuSelected: _onMenuSelected,
+      onNotificationSelected: _onNotificationSelected,
+      notificationReadNotifier: _notificationReadNotifier,
 
       // Người dùng đang đăng nhập
       user: widget.user,

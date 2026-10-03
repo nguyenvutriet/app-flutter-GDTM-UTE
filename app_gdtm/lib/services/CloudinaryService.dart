@@ -17,8 +17,7 @@ class CloudinaryConfig {
   static const String rootFolder = 'GDTM';
 
   // Các thư mục con
-  static const String feedbackFolder =
-      '$rootFolder/feedback_attachments';
+  static const String feedbackFolder = '$rootFolder/feedback_attachments';
 
   static const String conversationFolder =
       '$rootFolder/conversation_attachments';
@@ -52,6 +51,7 @@ class CloudinaryUploadResult {
 
   /// Phần mở rộng viết thường, không có dấu chấm (pdf, docx, png...).
   final String fileType;
+  final String? deleteToken;
 
   const CloudinaryUploadResult({
     required this.secureUrl,
@@ -60,6 +60,7 @@ class CloudinaryUploadResult {
     required this.bytes,
     required this.fileName,
     required this.fileType,
+    this.deleteToken,
   });
 }
 
@@ -101,8 +102,9 @@ class CloudinaryService {
       throw CloudinaryException('Không đọc được nội dung tệp "${file.name}".');
     }
 
-    final targetFolder =
-        (ownerId == null || ownerId.isEmpty) ? folder : '$folder/$ownerId';
+    final targetFolder = (ownerId == null || ownerId.isEmpty)
+        ? folder
+        : '$folder/$ownerId';
 
     final uri = Uri.parse(
       'https://api.cloudinary.com/v1_1/${CloudinaryConfig.cloudName}/auto/upload',
@@ -144,6 +146,7 @@ class CloudinaryService {
         bytes: (body['bytes'] as num?)?.toInt() ?? file.size,
         fileName: file.name,
         fileType: _extensionOf(file.name),
+        deleteToken: body['delete_token'] as String?,
       );
     } on TimeoutException {
       throw CloudinaryException(
@@ -155,6 +158,19 @@ class CloudinaryService {
       throw CloudinaryException(
         'Không kết nối được Cloudinary khi tải "${file.name}".',
       );
+    }
+  }
+
+  Future<void> deleteByToken(String token) async {
+    if (token.isEmpty) return;
+    final uri = Uri.parse(
+      'https://api.cloudinary.com/v1_1/${CloudinaryConfig.cloudName}/delete_by_token',
+    );
+    final response = await http
+        .post(uri, body: {'token': token})
+        .timeout(_timeout);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw CloudinaryException('Không thể xóa tệp khỏi Cloudinary.');
     }
   }
 

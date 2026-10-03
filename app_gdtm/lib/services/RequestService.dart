@@ -79,6 +79,7 @@ class RequestService {
     final attachments = <FileAttachment>[];
     final publicIds = <String, String>{}; // attachmentId -> public_id
     final resourceTypes = <String, String>{};
+    final deleteTokens = <String, String?>{};
 
     for (var i = 0; i < files.length; i++) {
       onUploadProgress?.call(i, files.length);
@@ -99,6 +100,7 @@ class RequestService {
       );
       publicIds[attachRef.id] = result.publicId;
       resourceTypes[attachRef.id] = result.resourceType;
+      deleteTokens[attachRef.id] = result.deleteToken;
     }
     onUploadProgress?.call(files.length, files.length);
 
@@ -131,6 +133,7 @@ class RequestService {
         // Cần public_id nếu sau này muốn xoá/biến đổi file trên Cloudinary.
         'publicId': publicIds[a.id],
         'resourceType': resourceTypes[a.id],
+        'deleteToken': deleteTokens[a.id],
       });
     }
 
@@ -142,11 +145,11 @@ class RequestService {
       'requestId': requestId,
     });
 
-    final notificationRef = _firestore
+    final departmentNotificationRef = _firestore
         .collection(notificationsCollection)
         .doc();
-    batch.set(notificationRef, {
-      'id': notificationRef.id,
+    batch.set(departmentNotificationRef, {
+      'id': departmentNotificationRef.id,
       'title': 'Có góp ý mới cần tiếp nhận',
       'content':
           '${user.fullName ?? user.id ?? 'Sinh viên'} đã gửi góp ý: ${subject.trim()}',
@@ -155,11 +158,158 @@ class RequestService {
       'createAt': Timestamp.fromDate(now),
       'departmentId': departmentId,
       'requestId': requestId,
+      'userId': null,
+    });
+
+    final userNotificationRef = _firestore
+        .collection(notificationsCollection)
+        .doc();
+    batch.set(userNotificationRef, {
+      'id': userNotificationRef.id,
+      'title': 'Bạn đã gửi một góp ý',
+      'content': 'Góp ý "${subject.trim()}" đã được gửi thành công.',
+      'notificationType': 'FEEDBACK_SUBMITTED',
+      'isRead': false,
+      'createAt': Timestamp.fromDate(now),
+      'departmentId': null,
+      'requestId': requestId,
       'userId': user.id,
     });
 
     await batch.commit();
     return requestId;
+  }
+
+  Future<void> updateFeedback({
+    required Request request,
+    required String userId,
+    required String subject,
+    required String description,
+    required String departmentId,
+    required List<String> categoryIds,
+    required FeedbackPrivacy privacy,
+    String? location,
+    List<PlatformFile> files = const [],
+    Set<String> retainedAttachmentIds = const {},
+    void Function(int done, int total)? onUploadProgress,
+  }) async {
+    final id = request.id;
+    if (id == null || id.isEmpty) throw StateError('Góp ý không hợp lệ.');
+    final requestRef = _firestore.collection(requestsCollection).doc(id);
+    final current = await requestRef.get();
+    if (!current.exists ||
+        (current.data()?['userId'] as String?) != userId ||
+        (current.data()?['currentStatus'] as String?) != initialStatus) {
+      throw StateError('Chỉ được cập nhật góp ý đang chờ tiếp nhận.');
+    }
+
+    final oldSnapshot = await _firestore
+        .collection(fileAttachmentsCollection)
+        .where('requestId', isEqualTo: id)
+        .get();
+
+    final uploaded = <CloudinaryUploadResult>[];
+    try {
+      for (var i = 0; i < files.length; i++) {
+        onUploadProgress?.call(i, files.length);
+        uploaded.add(await _cloudinary.uploadFile(files[i], ownerId: id));
+      }
+      onUploadProgress?.call(files.length, files.length);
+    } catch (_) {
+      for (final item in uploaded) {
+        if (item.deleteToken != null) {
+          await _cloudinary.deleteByToken(item.deleteToken!);
+        }
+      }
+      rethrow;
+    }
+
+    final batch = _firestore.batch();
+    batch.update(requestRef, {
+      'subject': subject.trim(),
+      'description': description.trim(),
+      'location': (location ?? '').trim().isEmpty ? null : location!.trim(),
+      'departmentId': departmentId,
+      'categoryIds': categoryIds,
+      'postStatus': privacy == FeedbackPrivacy.public
+          ? postStatusPublic
+          : postStatusPrivate,
+    });
+
+    final removedAttachments = oldSnapshot.docs
+        .where((doc) => !retainedAttachmentIds.contains(doc.id))
+        .toList();
+    final attachmentsChanged =
+        files.isNotEmpty ||
+        retainedAttachmentIds.length != oldSnapshot.docs.length;
+    if (attachmentsChanged) {
+      for (final doc in removedAttachments) {
+        batch.delete(doc.reference);
+      }
+      final now = DateTime.now();
+      for (final item in uploaded) {
+        final ref = _firestore.collection(fileAttachmentsCollection).doc();
+        batch.set(ref, {
+          'id': ref.id,
+          'filename': item.fileName,
+          'fileUrl': item.secureUrl,
+          'filestype': item.fileType,
+          'filesize': item.bytes,
+          'createat': Timestamp.fromDate(now),
+          'requestId': id,
+          'publicId': item.publicId,
+          'resourceType': item.resourceType,
+          'deleteToken': item.deleteToken,
+        });
+      }
+    }
+    await batch.commit();
+
+    if (attachmentsChanged) {
+      for (final doc in removedAttachments) {
+        final data = doc.data();
+        final token = data['deleteToken'] as String?;
+        if (token != null && token.isNotEmpty) {
+          await _cloudinary.deleteByToken(token);
+        }
+      }
+    }
+  }
+
+  Future<void> deleteFeedback(
+    String requestId, {
+    required String userId,
+  }) async {
+    final requestRef = _firestore.collection(requestsCollection).doc(requestId);
+    final request = await requestRef.get();
+    if (!request.exists ||
+        (request.data()?['userId'] as String?) != userId ||
+        (request.data()?['currentStatus'] as String?) != initialStatus) {
+      throw StateError('Chỉ được xóa góp ý đang chờ tiếp nhận.');
+    }
+    final attachments = await _firestore
+        .collection(fileAttachmentsCollection)
+        .where('requestId', isEqualTo: requestId)
+        .get();
+    final notifications = await _firestore
+        .collection(notificationsCollection)
+        .where('requestId', isEqualTo: requestId)
+        .get();
+    final batch = _firestore.batch();
+    batch.delete(requestRef);
+    for (final doc in attachments.docs) {
+      batch.delete(doc.reference);
+    }
+    for (final doc in notifications.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+    for (final doc in attachments.docs) {
+      final token = doc.data()['deleteToken'] as String?;
+      if (token != null && token.isNotEmpty) {
+        await _cloudinary.deleteByToken(token);
+      }
+    }
   }
 
   Future<List<Request>> getStudentFeedbackHistory(String userId) async {

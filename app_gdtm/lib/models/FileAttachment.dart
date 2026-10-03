@@ -14,6 +14,9 @@ class FileAttachment {
   // ID dùng để liên kết với các document khác trong Firestore
   String? requestId;
   String? announcementId;
+  String? publicId;
+  String? resourceType;
+  String? deleteToken;
 
   // Relationships - dùng ở phía Flutter
   Request? request;
@@ -28,6 +31,9 @@ class FileAttachment {
     this.createat,
     this.requestId,
     this.announcementId,
+    this.publicId,
+    this.resourceType,
+    this.deleteToken,
     this.request,
     this.announcement,
   });
@@ -52,6 +58,9 @@ class FileAttachment {
 
       requestId: json['requestId'],
       announcementId: json['announcementId'],
+      publicId: json['publicId'],
+      resourceType: json['resourceType'],
+      deleteToken: json['deleteToken'],
 
       request: json['request'] != null
           ? Request.fromJson(json['request'])
@@ -78,6 +87,9 @@ class FileAttachment {
 
       'requestId': requestId,
       'announcementId': announcementId,
+      'publicId': publicId,
+      'resourceType': resourceType,
+      'deleteToken': deleteToken,
 
       'request': request?.toJson(),
       'announcement': announcement?.toJson(),
@@ -107,6 +119,9 @@ class FileAttachment {
       requestId: data['requestId'],
 
       announcementId: data['announcementId'],
+      publicId: data['publicId'],
+      resourceType: data['resourceType'],
+      deleteToken: data['deleteToken'],
     );
   }
 
@@ -128,6 +143,9 @@ class FileAttachment {
 
       'requestId': requestId,
       'announcementId': announcementId,
+      'publicId': publicId,
+      'resourceType': resourceType,
+      'deleteToken': deleteToken,
     };
   }
 
@@ -146,6 +164,9 @@ class FileAttachment {
     String? announcementId,
     Request? request,
     Announcement? announcement,
+    String? publicId,
+    String? resourceType,
+    String? deleteToken,
   }) {
     return FileAttachment(
       id: id ?? this.id,
@@ -158,6 +179,9 @@ class FileAttachment {
       announcementId: announcementId ?? this.announcementId,
       request: request ?? this.request,
       announcement: announcement ?? this.announcement,
+      publicId: publicId ?? this.publicId,
+      resourceType: resourceType ?? this.resourceType,
+      deleteToken: deleteToken ?? this.deleteToken,
     );
   }
 }

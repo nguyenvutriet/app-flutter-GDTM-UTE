@@ -7,6 +7,9 @@ class Notification {
   String? title;
   bool? isRead;
   DateTime? createAt;
+  String? requestId;
+  String? userId;
+  String? departmentId;
 
   Notification({
     this.id,
@@ -15,6 +18,9 @@ class Notification {
     this.title,
     this.isRead,
     this.createAt,
+    this.requestId,
+    this.userId,
+    this.departmentId,
   });
 
   // ============================================================
@@ -28,6 +34,9 @@ class Notification {
       notificationType: json['notificationType'],
       title: json['title'],
       isRead: json['isRead'],
+      requestId: json['requestId'],
+      userId: json['userId'],
+      departmentId: json['departmentId'],
 
       createAt: json['createAt'] != null
           ? DateTime.tryParse(json['createAt'].toString())
@@ -46,6 +55,9 @@ class Notification {
       'notificationType': notificationType,
       'title': title,
       'isRead': isRead,
+      'requestId': requestId,
+      'userId': userId,
+      'departmentId': departmentId,
       'createAt': createAt?.toIso8601String(),
     };
   }
@@ -58,11 +70,14 @@ class Notification {
     final data = doc.data() as Map<String, dynamic>;
 
     return Notification(
-      id: data['id'] ?? doc.id,
+      id: doc.id,
       content: data['content'],
       notificationType: data['notificationType'],
       title: data['title'],
       isRead: data['isRead'],
+      requestId: data['requestId'],
+      userId: data['userId'],
+      departmentId: data['departmentId'],
       createAt: (data['createAt'] as Timestamp?)?.toDate(),
     );
   }
@@ -78,6 +93,9 @@ class Notification {
       'notificationType': notificationType,
       'title': title,
       'isRead': isRead,
+      'requestId': requestId,
+      'userId': userId,
+      'departmentId': departmentId,
 
       'createAt': createAt != null
           ? Timestamp.fromDate(createAt!)
@@ -96,6 +114,9 @@ class Notification {
     String? title,
     bool? isRead,
     DateTime? createAt,
+    String? requestId,
+    String? userId,
+    String? departmentId,
   }) {
     return Notification(
       id: id ?? this.id,
@@ -105,6 +126,9 @@ class Notification {
       title: title ?? this.title,
       isRead: isRead ?? this.isRead,
       createAt: createAt ?? this.createAt,
+      requestId: requestId ?? this.requestId,
+      userId: userId ?? this.userId,
+      departmentId: departmentId ?? this.departmentId,
     );
   }
 }
