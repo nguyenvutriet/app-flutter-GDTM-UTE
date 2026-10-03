@@ -13,11 +13,19 @@ import 'package:app_gdtm/pages/common/notification_page.dart';
 import 'package:app_gdtm/pages/login/login_page.dart';
 import 'package:app_gdtm/services/AuthService.dart';
 import 'package:app_gdtm/services/forum_service.dart';
+import 'package:app_gdtm/services/announcement_service.dart';
+import 'package:app_gdtm/services/CategoryService.dart';
 import 'package:app_gdtm/pages/student/send_feedback_page.dart';
 import 'package:app_gdtm/pages/student/edit_feedback_page.dart';
 import 'package:app_gdtm/pages/student/feedback_history_page.dart';
 import 'package:app_gdtm/pages/student/feedback_detail_page.dart';
 import 'package:app_gdtm/pages/student/forum_page.dart';
+import 'package:app_gdtm/pages/student/department_announcements_page.dart';
+import 'package:app_gdtm/pages/staff/manage_notifications_page.dart';
+import 'package:app_gdtm/pages/common/change_password_page.dart';
+import 'package:app_gdtm/pages/admin/category_management_page.dart';
+import 'package:app_gdtm/services/comment_report_service.dart';
+import 'package:app_gdtm/pages/admin/violation_comments_page.dart';
 
 /// Trang chủ dashboard: khung (header + menu) dùng chung,
 /// menu và nội dung đổi theo role và mục menu được chọn.
@@ -38,7 +46,7 @@ class _DashboardPageState extends State<DashboardPage> {
   // Role lấy từ tài khoản đăng nhập (widget.role)
   // final String _userId = '23110147'; // TODO: lấy từ user đăng nhập
 
-  String _selectedId = 'notifications';
+  String _selectedId = 'forum';
   Request? _selectedFeedback;
   List<Department> _feedbackDepartments = [];
   List<Category> _feedbackCategories = [];
@@ -49,6 +57,19 @@ class _DashboardPageState extends State<DashboardPage> {
 
   /// Service diễn đàn (dùng chung cho mọi role). Users.id là userId lưu trên Firestore.
   late final ForumService _forum = ForumService(
+    currentUserId: () => widget.user.id,
+  );
+
+  /// Service thông báo announcement (xem: mọi role; đăng: giảng viên).
+  late final AnnouncementService _announcements = AnnouncementService(
+    currentUserId: () => widget.user.id,
+  );
+
+  /// Service danh mục (dùng cho trang quản lý danh mục của admin).
+  final CategoryService _categoryService = CategoryService();
+
+  /// Service kiểm duyệt báo cáo bình luận (admin).
+  late final CommentReportService _reportService = CommentReportService(
     currentUserId: () => widget.user.id,
   );
 
@@ -82,6 +103,11 @@ class _DashboardPageState extends State<DashboardPage> {
                 id: 'notifications',
                 title: 'Thông báo',
                 icon: Icons.notifications,
+              ),
+              AppMenuItem(
+                id: 'department_announcements',
+                title: 'Thông báo phòng ban',
+                icon: Icons.campaign,
               ),
               AppMenuItem(
                 id: 'change_password',
@@ -175,6 +201,16 @@ class _DashboardPageState extends State<DashboardPage> {
       embedded: true, // AppShell đã có header, không vẽ AppBar riêng
       currentUserName: widget.user.fullName ?? '',
       onCompose: onCompose,
+      canReport: widget.role != UserRole.admin, // admin không báo cáo bình luận
+    );
+  }
+
+  /// Trang đổi mật khẩu dùng chung cho mọi role.
+  /// Đổi xong quay về trang chủ (mục "Diễn đàn" - mục mở sẵn sau khi đăng nhập).
+  Widget _changePasswordPage() {
+    return ChangePasswordPage(
+      user: widget.user,
+      onSuccess: () => setState(() => _selectedId = 'forum'),
     );
   }
 
@@ -231,6 +267,8 @@ class _DashboardPageState extends State<DashboardPage> {
               onOpenFeedback: _openFeedbackFromNotification,
               onReadChanged: _onNotificationReadChanged,
             );
+          case 'department_announcements':
+            return DepartmentAnnouncementsPage(service: _announcements);
           case 'send_feedback':
             return SendFeedbackPage(
               user: widget.user,
@@ -242,12 +280,19 @@ class _DashboardPageState extends State<DashboardPage> {
             return _forumPage(
               onCompose: () => setState(() => _selectedId = 'send_feedback'),
             );
+
+          case 'change_password':
+            return _changePasswordPage();
+
           default:
             return _PlaceholderPage(title: _titleOf(_selectedId));
         }
 
       case UserRole.staff:
         switch (_selectedId) {
+          case 'manage_notifications':
+            return ManageNotificationsPage(service: _announcements);
+
           case 'notifications':
             return NotificationPage(
               user: widget.user,
@@ -257,6 +302,10 @@ class _DashboardPageState extends State<DashboardPage> {
             );
           case 'forum':
             return _forumPage();
+
+          case 'change_password':
+            return _changePasswordPage();
+
           // TODO: case 'statistics': return const StatisticsPage();
           default:
             return _PlaceholderPage(title: _titleOf(_selectedId));
@@ -274,6 +323,22 @@ class _DashboardPageState extends State<DashboardPage> {
           case 'forum':
             return _forumPage();
           // TODO: case 'manage_categories': return const CategoriesPage();
+
+          case 'change_password':
+            return _changePasswordPage();
+
+          case 'violation_comments':
+            return ViolationCommentsPage(
+              service: _reportService,
+              forum: _forum,
+              embedded: true,
+            );
+
+          case 'manage_categories':
+            return CategoryManagementPage(
+              service: _categoryService,
+              embedded: true, // AppShell đã có header, không vẽ AppBar riêng
+            );
           default:
             return _PlaceholderPage(title: _titleOf(_selectedId));
         }

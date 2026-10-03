@@ -66,8 +66,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void didUpdateWidget(covariant AppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.notificationReadNotifier !=
-        widget.notificationReadNotifier) {
+    if (oldWidget.notificationReadNotifier != widget.notificationReadNotifier) {
       oldWidget.notificationReadNotifier?.removeListener(
         _onNotificationReadChanged,
       );
@@ -98,8 +97,7 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
-  void _onNotificationReadChanged(
-  ) {
+  void _onNotificationReadChanged() {
     final notification = widget.notificationReadNotifier?.value;
     if (notification == null || !mounted) return;
     setState(() {
@@ -110,10 +108,7 @@ class _AppShellState extends State<AppShell> {
       } else if (!_unreadNotifications.any(
         (item) => item.id == notification.id,
       )) {
-        _unreadNotifications = [
-          ..._unreadNotifications,
-          notification,
-        ];
+        _unreadNotifications = [..._unreadNotifications, notification];
       }
       _notificationCount = _unreadNotifications.length;
     });
@@ -200,54 +195,67 @@ class _AppShellState extends State<AppShell> {
           // NỘI DUNG CHÍNH
           // ========================================================
           Expanded(
-            child: Column(
-              children: [
-                // --------------------------------------------------
-                // HEADER
-                // --------------------------------------------------
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Flutter Web can briefly report a 1x1 viewport while the
+                // browser is attaching the view. Avoid laying out the fixed
+                // header in that transient space.
+                if (constraints.maxHeight < 60) {
+                  return const SizedBox.shrink();
+                }
 
-                AppHeader(
-                  user: widget.user,
-                  notificationCount: _notificationCount,
-                  unreadNotifications: _unreadNotifications,
-                  onNotificationSelected: widget.onNotificationSelected == null
-                      ? null
-                      : (notification) async {
-                          final id = notification.id;
-                          if (id == null || id.isEmpty) return;
+                return Column(
+                  children: [
+                    // --------------------------------------------------
+                    // HEADER
+                    // --------------------------------------------------
+
+                    AppHeader(
+                      user: widget.user,
+                      notificationCount: _notificationCount,
+                      unreadNotifications: _unreadNotifications,
+                      onNotificationSelected:
+                          widget.onNotificationSelected == null
+                          ? null
+                          : (notification) async {
+                              final id = notification.id;
+                              if (id == null || id.isEmpty) return;
+                              setState(() {
+                                _unreadNotifications = _unreadNotifications
+                                    .where((item) => item.id != id)
+                                    .toList();
+                                _notificationCount =
+                                    _unreadNotifications.length;
+                              });
+                              widget.onNotificationSelected!(notification);
+                              await _notificationService.setNotificationRead(
+                                id,
+                                true,
+                              );
+                            },
+
+                      onMenuPressed: () {
+                        if (isDesktop) {
+                          // Laptop:
+                          // mở / đóng sidebar
                           setState(() {
-                            _unreadNotifications = _unreadNotifications
-                                .where((item) => item.id != id)
-                                .toList();
-                            _notificationCount = _unreadNotifications.length;
+                            _sidebarOpen = !_sidebarOpen;
                           });
-                          widget.onNotificationSelected!(notification);
-                          await _notificationService.setNotificationRead(
-                            id,
-                            true,
-                          );
-                        },
+                        } else {
+                          // Mobile:
+                          // mở Drawer
+                          _scaffoldKey.currentState?.openDrawer();
+                        }
+                      },
+                    ),
 
-                  onMenuPressed: () {
-                    if (isDesktop) {
-                      // Laptop:
-                      // mở / đóng sidebar
-                      setState(() {
-                        _sidebarOpen = !_sidebarOpen;
-                      });
-                    } else {
-                      // Mobile:
-                      // mở Drawer
-                      _scaffoldKey.currentState?.openDrawer();
-                    }
-                  },
-                ),
-
-                // --------------------------------------------------
-                // PAGE CONTENT
-                // --------------------------------------------------
-                Expanded(child: widget.child),
-              ],
+                    // --------------------------------------------------
+                    // PAGE CONTENT
+                    // --------------------------------------------------
+                    Expanded(child: widget.child),
+                  ],
+                );
+              },
             ),
           ),
         ],

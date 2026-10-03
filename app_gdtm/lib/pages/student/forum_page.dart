@@ -23,12 +23,16 @@ class ForumPage extends StatefulWidget {
   /// true = nhúng trong AppShell, không vẽ Scaffold/AppBar
   final bool embedded;
 
+  /// false = ẩn nút "Báo cáo" bình luận (dùng cho admin)
+  final bool canReport;
+
   const ForumPage({
     super.key,
     required this.service,
     this.currentUserName = '',
     this.onCompose,
     this.embedded = false,
+    this.canReport = true,
   });
 
   @override
@@ -142,6 +146,7 @@ class _ForumPageState extends State<ForumPage> {
         builder: (_) => PostDetailPage(
           initialPost: p,
           service: widget.service,
+          canReport: widget.canReport,
           onPostChanged: (np) => _replace(np.id, (_) => np),
         ),
       ),

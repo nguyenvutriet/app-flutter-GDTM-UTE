@@ -46,6 +46,9 @@ class CommentDTO {
   final DateTime? date;
   final bool canDelete;
 
+  /// Bị admin ẩn (vi phạm). Chỉ admin mới nhận được bình luận loại này (hiển thị mờ).
+  final bool isHidden;
+
   /// Cấu trúc reply: parentId = bình luận gốc, replyId = bình luận được trả lời trực tiếp
   final String? parentId;
   final String? replyId;
@@ -64,6 +67,7 @@ class CommentDTO {
     this.userRole = 'ROLE_STUDENT',
     this.date,
     this.canDelete = false,
+    this.isHidden = false,
     this.parentId,
     this.replyId,
     this.replyToUserId,
@@ -92,6 +96,7 @@ class CommentDTO {
     String? reactionType,
     bool clearReaction = false,
     List<CommentDTO>? replies,
+    bool? isHidden,
   }) =>
       CommentDTO(
         id: id,
@@ -101,6 +106,7 @@ class CommentDTO {
         userRole: userRole,
         date: date,
         canDelete: canDelete,
+        isHidden: isHidden ?? this.isHidden,
         parentId: parentId,
         replyId: replyId,
         replyToUserId: replyToUserId,

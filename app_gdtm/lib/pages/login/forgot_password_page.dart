@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:app_gdtm/pages/login/auth_layout.dart';
 import 'package:app_gdtm/pages/login/otp_verification_page.dart';
 import 'package:app_gdtm/services/PasswordResetService.dart';
-import 'package:app_gdtm/widgets/app_colors.dart';
 
 /// Trang "Quên mật khẩu" (chuyển từ giao diện web "Cổng thông tin đào tạo").
 ///
@@ -201,7 +200,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               ],
               onChanged: (_) => _clearServerError(),
               onFieldSubmitted: (_) => _emailFocus.requestFocus(),
-              decoration: _inputDecoration('Mã SV/HV/NCS'),
+              decoration: authInputDecoration('Mã SV/HV/NCS'),
               validator: _validateStudentId,
             ),
             const SizedBox(height: 20),
@@ -222,7 +221,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               ],
               onChanged: (_) => _clearServerError(),
               onFieldSubmitted: (_) => _onSubmit(),
-              decoration: _inputDecoration('Địa chỉ email'),
+              decoration: authInputDecoration('Địa chỉ email'),
               validator: _validateEmail,
             ),
 
@@ -242,42 +241,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           ],
         ),
       ),
-    );
-  }
-
-  /// Ô nhập nền trắng, viền xám xanh; khi lỗi: viền, label và dòng báo lỗi
-  /// đều đỏ (giống web).
-  InputDecoration _inputDecoration(String label) {
-    OutlineInputBorder border(Color color, [double width = 1]) {
-      return OutlineInputBorder(
-        borderRadius: BorderRadius.circular(4),
-        borderSide: BorderSide(color: color, width: width),
-      );
-    }
-
-    TextStyle labelStyle(Set<WidgetState> states, double size) {
-      final isError = states.contains(WidgetState.error);
-      return TextStyle(
-        color: isError ? kAuthErrorColor : kAuthMutedColor,
-        fontSize: size,
-      );
-    }
-
-    return InputDecoration(
-      labelText: label,
-      labelStyle: WidgetStateTextStyle.resolveWith((s) => labelStyle(s, 16)),
-      floatingLabelStyle:
-          WidgetStateTextStyle.resolveWith((s) => labelStyle(s, 14)),
-      errorStyle: const TextStyle(color: kAuthErrorColor, fontSize: 12),
-      errorMaxLines: 3,
-      filled: true,
-      fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
-      enabledBorder: border(kAuthFieldBorder),
-      disabledBorder: border(kAuthFieldBorder),
-      focusedBorder: border(AppColors.primary, 2),
-      errorBorder: border(kAuthErrorColor),
-      focusedErrorBorder: border(kAuthErrorColor, 2),
     );
   }
 }

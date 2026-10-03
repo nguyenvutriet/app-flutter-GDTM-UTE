@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:bcrypt/bcrypt.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/foundation.dart' show compute, debugPrint, kIsWeb;
 import 'package:http/http.dart' as http;
 
 import 'package:app_gdtm/services/AuthService.dart';
@@ -78,8 +79,9 @@ class PasswordResetSession {
   DateTime _expiresAt;
   int _failedAttempts = 0;
   bool _verified = false;
+  DateTime? _verifiedAt;
 
-  /// Đã nhập đúng OTP.
+  /// Đã nhập đúng OTP (và chưa đổi mật khẩu xong).
   bool get isVerified => _verified;
 
   /// Thời gian còn lại của mã OTP hiện tại (0 nếu đã hết hạn / bị huỷ).
@@ -105,6 +107,18 @@ class PasswordResetService {
 
   /// Số lần nhập sai tối đa trước khi mã bị huỷ.
   static const int maxAttempts = 5;
+
+  /// Sau khi nhập đúng OTP, người dùng có tối đa chừng này thời gian để đặt
+  /// mật khẩu mới; quá hạn phải làm lại từ đầu.
+  static const Duration resetWindow = Duration(minutes: 10);
+
+  /// Độ dài mật khẩu mới (tối đa 64 ký tự ASCII, nằm trong giới hạn 72 byte
+  /// của bcrypt).
+  static const int passwordMinLength = 8;
+  static const int passwordMaxLength = 64;
+
+  /// Độ khó bcrypt (cost 12 -> chuỗi băm dạng "$2a$12$...").
+  static const int bcryptCost = 12;
 
   static const Duration _networkTimeout = Duration(seconds: 20);
 
@@ -234,6 +248,71 @@ class PasswordResetService {
 
     session._otp = ''; // mã chỉ dùng được một lần
     session._verified = true;
+    session._verifiedAt = DateTime.now();
+  }
+
+  // ============================================================
+  // BƯỚC 4: ĐẶT MẬT KHẨU MỚI
+  // ============================================================
+
+  /// Băm [newPassword] bằng bcrypt rồi cập nhật field `password` của user
+  /// trên Firestore (collection `users`). Chỉ chạy khi session đã nhập đúng OTP.
+  /// Ném [PasswordResetException] nếu thất bại.
+  Future<void> resetPassword(
+    PasswordResetSession session,
+    String newPassword,
+  ) async {
+    final verifiedAt = session._verifiedAt;
+    if (!session._verified || verifiedAt == null) {
+      throw const PasswordResetException(
+        'Bạn chưa xác thực mã OTP. Vui lòng thực hiện lại từ đầu.',
+      );
+    }
+    if (DateTime.now().difference(verifiedAt) > resetWindow) {
+      throw const PasswordResetException(
+        'Phiên đặt lại mật khẩu đã hết hạn. Vui lòng thực hiện lại từ đầu.',
+      );
+    }
+
+    final userRef =
+        _firestore.collection(AuthService.usersCollection).doc(session.userDocId);
+
+    try {
+      final snap = await userRef.get().timeout(_networkTimeout);
+      if (!snap.exists) {
+        throw const PasswordResetException(
+          'Không tìm thấy tài khoản. Vui lòng thực hiện lại từ đầu.',
+        );
+      }
+
+      // Mật khẩu mới phải khác mật khẩu hiện tại (hỗ trợ cả BCrypt lẫn chuỗi thường).
+      final current = (snap.data()?['password'] as String?) ?? '';
+      if (await _matchesCurrentPassword(newPassword, current)) {
+        throw const PasswordResetException(
+          'Mật khẩu mới phải khác mật khẩu hiện tại.',
+        );
+      }
+
+      // Băm bcrypt (chạy ở isolate riêng trên mobile để không đứng giao diện).
+      final hash = await compute(_bcryptHash, newPassword);
+      await userRef.update({'password': hash}).timeout(_networkTimeout);
+    } on FirebaseException catch (e) {
+      throw _mapFirestoreError(e, write: true);
+    } on TimeoutException {
+      throw const PasswordResetException(_networkError);
+    }
+
+    // Phiên chỉ dùng được một lần.
+    session._verified = false;
+    session._verifiedAt = null;
+  }
+
+  Future<bool> _matchesCurrentPassword(String input, String stored) async {
+    if (stored.isEmpty) return false;
+    if (stored.startsWith(r'$2')) {
+      return compute(_bcryptMatches, [input, stored]);
+    }
+    return input == stored;
   }
 
   // ============================================================
@@ -261,10 +340,15 @@ class PasswordResetService {
     return query.docs.isEmpty ? null : query.docs.first;
   }
 
-  PasswordResetException _mapFirestoreError(FirebaseException e) {
+  PasswordResetException _mapFirestoreError(
+    FirebaseException e, {
+    bool write = false,
+  }) {
     if (e.code == 'permission-denied') {
-      return const PasswordResetException(
-        'Không có quyền đọc dữ liệu tài khoản. Hãy kiểm tra Firestore Rules.',
+      return PasswordResetException(
+        write
+            ? 'Không có quyền cập nhật mật khẩu. Hãy kiểm tra Firestore Rules.'
+            : 'Không có quyền đọc dữ liệu tài khoản. Hãy kiểm tra Firestore Rules.',
       );
     }
     if (e.code == 'unavailable') {
@@ -282,7 +366,8 @@ class PasswordResetService {
   }
 
   /// Gửi email chứa OTP qua EmailJS.
-  /// Các biến template: to_email, to_name, student_id, otp_code, expire_text.
+  /// Các biến template: to_email (email), to_name (name), student_id, otp_code,
+  /// expire_text.
   Future<void> _sendOtpEmail({
     required String toEmail,
     required String toName,
@@ -292,7 +377,7 @@ class PasswordResetService {
     if (!EmailJsConfig.isConfigured) {
       throw const PasswordResetException(
         'Chưa cấu hình dịch vụ gửi email. Hãy điền EmailJsConfig '
-        '(xem HUONG_DAN_QUEN_MAT_KHAU.md).',
+        ,
       );
     }
 
@@ -313,6 +398,11 @@ class PasswordResetService {
               'template_params': {
                 'to_email': toEmail,
                 'to_name': toName,
+                // Tên biến dự phòng: template mặc định của EmailJS dùng
+                // {{email}} / {{name}} nên gửi kèm để không bị lỗi
+                // "The recipients address is empty" nếu quên đổi.
+                'email': toEmail,
+                'name': toName,
                 'student_id': studentId,
                 'otp_code': otp,
                 'expire_text': _lifetimeText,
@@ -338,5 +428,23 @@ class PasswordResetService {
     } on http.ClientException {
       throw const PasswordResetException(_networkError);
     }
+  }
+}
+
+/// Chạy trong isolate (compute): băm mật khẩu bằng bcrypt.
+String _bcryptHash(String password) {
+  return BCrypt.hashpw(
+    password,
+    BCrypt.gensalt(logRounds: PasswordResetService.bcryptCost),
+  );
+}
+
+/// Chạy trong isolate (compute): so khớp mật khẩu với chuỗi băm bcrypt.
+/// args = [mật khẩu nhập, chuỗi băm đang lưu].
+bool _bcryptMatches(List<String> args) {
+  try {
+    return BCrypt.checkpw(args[0], args[1]);
+  } catch (_) {
+    return false;
   }
 }
