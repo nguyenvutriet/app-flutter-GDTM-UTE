@@ -1,67 +1,55 @@
-// lib/services/comment_report_service.dart
-// Admin kiểm duyệt báo cáo bình luận (collection: commentreport).
-// Phía sinh viên gửi báo cáo nằm trong ForumService.reportComment().
+// lib/services/post_report_service.dart
+// Admin kiểm duyệt báo cáo bài viết (collection: postreport).
+// Phía người dùng gửi báo cáo nằm trong ForumService.reportPost();
+// ẩn / hiện bài bất kỳ nằm trong ForumService.setPostHidden().
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:app_gdtm/services/RequestService.dart';
+import 'package:app_gdtm/services/comment_report_service.dart' show ReportStatus;
 import 'package:app_gdtm/services/forum_service.dart';
 
-class ReportStatus {
-  static const String pending = 'pending';
-  static const String notViolation = 'not_violation';
-  static const String violation = 'violation';
-}
+export 'package:app_gdtm/services/comment_report_service.dart' show ReportStatus;
 
-/// Một dòng báo cáo đã gộp sẵn nội dung bình luận, tên người báo cáo, tên admin...
-class ReportItem {
+/// Một dòng báo cáo bài viết đã gộp sẵn tiêu đề bài, tên người báo cáo...
+class PostReportItem {
   final String id;
   final String reason;
   final String status;
   final DateTime? createdAt;
 
-  final String commentId;
-  final bool commentExists;
-  final String commentContent;
-  final bool commentActive;
+  final String postId;
+  final bool postExists;
+  final String postTitle;
 
-  /// Bình luận đang bị admin ẩn
-  final bool commentHidden;
-  final String? requestId;
+  /// Bài đang bị admin ẩn
+  final bool postHidden;
 
   final String reporterId;
   final String reporterName;
 
-  final bool postHidden;
-
-  const ReportItem({
+  const PostReportItem({
     required this.id,
     required this.reason,
     required this.status,
-    required this.commentId,
+    required this.postId,
     required this.reporterId,
     required this.reporterName,
     this.createdAt,
-    this.commentExists = true,
-    this.commentContent = '',
-    this.commentActive = true,
-    this.commentHidden = false,
-    this.requestId,
+    this.postExists = true,
+    this.postTitle = '',
     this.postHidden = false,
   });
+}
 
-  bool get effectivelyHidden => commentHidden || postHidden;
-
-  }
-
-
-class CommentReportService {
-  static const String reportsCollection = ForumService.commentReportsCollection;
+class PostReportService {
+  static const String reportsCollection = ForumService.postReportsCollection;
   static const int _whereInLimit = 30;
 
   final FirebaseFirestore _db;
   final String? Function() _getCurrentUserId;
 
   /// [currentUserId]: Users.id của admin đang đăng nhập.
-  CommentReportService({
+  PostReportService({
     required String? Function() currentUserId,
     FirebaseFirestore? db,
   })  : _getCurrentUserId = currentUserId,
@@ -73,46 +61,37 @@ class CommentReportService {
     return id;
   }
 
-  /// Tất cả báo cáo (mới nhất trước) kèm thông tin bình luận + người dùng.
-  Future<List<ReportItem>> getReports() async {
+  /// Tất cả báo cáo bài viết (mới nhất trước).
+  Future<List<PostReportItem>> getReports() async {
     _uid;
     final snap = await _db.collection(reportsCollection).get();
     if (snap.docs.isEmpty) return [];
 
     final reports = snap.docs.map((d) => MapEntry(d.id, d.data())).toList();
-
-    final commentIds =
-        reports.map((e) => e.value['commentId']).whereType<String>().toSet();
+    final postIds =
+        reports.map((e) => e.value['requestId']).whereType<String>().toSet();
     final userIds =
         reports.map((e) => e.value['studentId']).whereType<String>().toSet();
 
-    final comments = await _loadComments(commentIds);
-
-    final hiddenPosts = await _loadHiddenPostIds(comments.values
-        .map((c) => c['requestId']?.toString() ?? '')
-        .toSet());
-
+    final posts = await _loadPosts(postIds);
     final users = await _loadUsers(userIds);
 
     final items = reports.map((e) {
       final m = e.value;
-      final commentId = m['commentId']?.toString() ?? '';
-      final c = comments[commentId];
+      final postId = m['requestId']?.toString() ?? '';
+      final p = posts[postId];
       final studentId = m['studentId']?.toString() ?? '';
-      return ReportItem(
+      return PostReportItem(
         id: e.key,
         reason: m['reason']?.toString() ?? '',
         status: (m['status']?.toString().isNotEmpty ?? false)
             ? m['status'].toString()
             : ReportStatus.pending,
         createdAt: (m['createdAt'] as Timestamp?)?.toDate(),
-        commentId: commentId,
-        commentExists: c != null,
-        commentContent: c?['content']?.toString() ?? '[Bình luận không còn tồn tại]',
-        commentActive: c == null ? false : c['isActive'] != false,
-        commentHidden: c?['isHidden'] == true,
-        postHidden: hiddenPosts.contains(c?['requestId']?.toString()),
-        requestId: c?['requestId']?.toString(),
+        postId: postId,
+        postExists: p != null,
+        postTitle: p?['subject']?.toString() ?? '[Bài viết không còn tồn tại]',
+        postHidden: p?['isHidden'] == true,
         reporterId: studentId,
         reporterName: _userName(users[studentId], fallback: studentId),
       );
@@ -123,14 +102,13 @@ class CommentReportService {
     return items;
   }
 
-  /// Admin xử lý một báo cáo ĐANG CHỜ (đã xử lý rồi thì không đổi nữa — muốn đổi thì
-  /// dùng ẩn/hiện bình luận). Quyết định áp dụng cho cả bình luận, nên tất cả báo cáo
-  /// đang chờ của cùng bình luận được chốt cùng một kết quả:
-  /// - violation = true : báo cáo -> "vi phạm", bình luận bị ẩn (isHidden = true):
-  ///   người dùng khác không thấy, admin vẫn thấy ở dạng mờ.
-  /// - violation = false: báo cáo -> "không vi phạm", bình luận giữ nguyên.
-  Future<void> resolve(ReportItem item, {required bool violation}) async {
-    _uid; // bắt buộc đăng nhập
+  /// Admin xử lý một báo cáo ĐANG CHỜ (đã xử lý rồi thì chốt, muốn đổi thì ẩn/hiện bài).
+  /// Quyết định áp dụng cho cả bài, nên mọi báo cáo đang chờ của cùng bài được chốt
+  /// cùng một kết quả:
+  /// - violation = true : -> "vi phạm", bài bị ẩn (isHidden = true).
+  /// - violation = false: -> "không vi phạm", bài giữ nguyên.
+  Future<void> resolve(PostReportItem item, {required bool violation}) async {
+    _uid;
 
     final fresh = await _db.collection(reportsCollection).doc(item.id).get();
     if (!fresh.exists) throw ForumException('Báo cáo không còn tồn tại');
@@ -139,22 +117,10 @@ class CommentReportService {
       throw ForumException('Báo cáo này đã được xử lý');
     }
 
-        // Bình luận thuộc bài viết đang ẩn thì chưa xử lý được
-    final cDoc =
-        await _db.collection(ForumService.commentsCollection).doc(item.commentId).get();
-    final rid = cDoc.data()?['requestId']?.toString() ?? '';
-    if (rid.isNotEmpty) {
-      final post = await _db.collection(ForumService.requestsCollection).doc(rid).get();
-      if (post.data()?['isHidden'] == true) {
-        throw ForumException(
-            'Bài viết đang bị ẩn. Hãy hiện lại bài viết trước khi xử lý bình luận.');
-      }
-    }
-
     final status = violation ? ReportStatus.violation : ReportStatus.notViolation;
     final same = await _db
         .collection(reportsCollection)
-        .where('commentId', isEqualTo: item.commentId)
+        .where('requestId', isEqualTo: item.postId)
         .get();
 
     final batch = _db.batch();
@@ -162,9 +128,9 @@ class CommentReportService {
       final st = d.data()['status']?.toString() ?? ReportStatus.pending;
       if (st == ReportStatus.pending) batch.update(d.reference, {'status': status});
     }
-    if (violation && item.commentExists) {
+    if (violation && item.postExists) {
       batch.update(
-        _db.collection(ForumService.commentsCollection).doc(item.commentId),
+        _db.collection(RequestService.requestsCollection).doc(item.postId),
         {'isHidden': true},
       );
     }
@@ -173,14 +139,13 @@ class CommentReportService {
 
   // ---------------- Nội bộ ----------------
 
-  Future<Map<String, Map<String, dynamic>>> _loadComments(Set<String> ids) async {
+  Future<Map<String, Map<String, dynamic>>> _loadPosts(Set<String> ids) async {
     final out = <String, Map<String, dynamic>>{};
-    // Firestore không cho truy vấn documentId rỗng
     final list = ids.where((e) => e.trim().isNotEmpty).toList();
     for (var i = 0; i < list.length; i += _whereInLimit) {
       final end = i + _whereInLimit > list.length ? list.length : i + _whereInLimit;
       final snap = await _db
-          .collection(ForumService.commentsCollection)
+          .collection(RequestService.requestsCollection)
           .where(FieldPath.documentId, whereIn: list.sublist(i, end))
           .get();
       for (final d in snap.docs) {
@@ -193,7 +158,6 @@ class CommentReportService {
   /// Hỗ trợ cả hai kiểu: doc id = Users.id hoặc field 'id' = Users.id.
   Future<Map<String, Map<String, dynamic>>> _loadUsers(Set<String> ids) async {
     final out = <String, Map<String, dynamic>>{};
-    // Firestore không cho truy vấn documentId rỗng
     final list = ids.where((e) => e.trim().isNotEmpty).toList();
     for (var i = 0; i < list.length; i += _whereInLimit) {
       final end = i + _whereInLimit > list.length ? list.length : i + _whereInLimit;
@@ -220,22 +184,5 @@ class CommentReportService {
   String _userName(Map<String, dynamic>? u, {String fallback = 'Ẩn danh'}) {
     final n = u?['fullName'] ?? u?['fullname'] ?? u?['name'];
     return (n == null || n.toString().isEmpty) ? fallback : n.toString();
-  }
-
-    /// Trong các bài [ids], trả về id những bài đang bị admin ẩn.
-  Future<Set<String>> _loadHiddenPostIds(Set<String> ids) async {
-    final out = <String>{};
-    final list = ids.where((e) => e.trim().isNotEmpty).toList();
-    for (var i = 0; i < list.length; i += _whereInLimit) {
-      final end = i + _whereInLimit > list.length ? list.length : i + _whereInLimit;
-      final snap = await _db
-          .collection(ForumService.requestsCollection)
-          .where(FieldPath.documentId, whereIn: list.sublist(i, end))
-          .get();
-      for (final d in snap.docs) {
-        if (d.data()['isHidden'] == true) out.add(d.id);
-      }
-    }
-    return out;
   }
 }

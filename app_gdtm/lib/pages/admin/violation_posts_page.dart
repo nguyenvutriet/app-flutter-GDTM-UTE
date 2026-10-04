@@ -1,23 +1,23 @@
-// lib/pages/admin/violation_comments_page.dart
-// Quản lý bình luận vi phạm (admin): thống kê, tìm kiếm, lọc ngày, lọc trạng thái,
-// xem nguồn (bài viết), duyệt "Không vi phạm" / "Vi phạm — ẩn bình luận".
+// lib/pages/admin/violation_posts_page.dart
+// Quản lý bài viết vi phạm (admin): thống kê, tìm kiếm, lọc ngày, lọc trạng thái,
+// xem bài viết, duyệt "Không vi phạm" / "Vi phạm — ẩn bài viết".
 // Responsive: >= 900px dạng bảng, nhỏ hơn dạng thẻ. embedded = true: dùng trong AppShell.
 import 'package:flutter/material.dart';
 
 import 'package:app_gdtm/pages/student/post_detail_page.dart';
-import 'package:app_gdtm/services/comment_report_service.dart';
+import 'package:app_gdtm/services/post_report_service.dart';
 import 'package:app_gdtm/services/forum_service.dart';
 import 'package:app_gdtm/widgets/forum_utils.dart'; // kFbBg, kFbBlue, kFbText2
 import 'package:app_gdtm/widgets/page_title.dart';
 
-class ViolationCommentsPage extends StatefulWidget {
-  final CommentReportService service;
+class ViolationPostsPage extends StatefulWidget {
+  final PostReportService service;
 
   /// Dùng để mở bài viết gốc khi bấm "Xem"
   final ForumService forum;
   final bool embedded;
 
-  const ViolationCommentsPage({
+  const ViolationPostsPage({
     super.key,
     required this.service,
     required this.forum,
@@ -25,10 +25,10 @@ class ViolationCommentsPage extends StatefulWidget {
   });
 
   @override
-  State<ViolationCommentsPage> createState() => _ViolationCommentsPageState();
+  State<ViolationPostsPage> createState() => _ViolationPostsPageState();
 }
 
-class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
+class _ViolationPostsPageState extends State<ViolationPostsPage> {
   static const double _wideBreakpoint = 900;
   static const _green = Color(0xFF1E8E3E);
   static const _greenBg = Color(0xFFE6F4EA);
@@ -46,7 +46,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
 
   final TextEditingController _searchCtl = TextEditingController();
 
-  List<ReportItem> _all = [];
+  List<PostReportItem> _all = [];
   bool _loading = true;
   String? _error;
   String _keyword = '';
@@ -82,7 +82,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
     }
   }
 
-  List<ReportItem> get _filtered {
+  List<PostReportItem> get _filtered {
     final k = _keyword.trim().toLowerCase();
     final list = _all.where((r) {
       if (_status != 'all' && r.status != _status) return false;
@@ -95,7 +95,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
         if (d.isBefore(start) || !d.isBefore(end)) return false;
       }
       if (k.isEmpty) return true;
-      return r.commentContent.toLowerCase().contains(k) ||
+      return r.postTitle.toLowerCase().contains(k) ||
           r.reason.toLowerCase().contains(k) ||
           r.reporterName.toLowerCase().contains(k);
     }).toList();
@@ -134,21 +134,21 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
     if (r != null) setState(() => _range = r);
   }
 
-  Future<void> _resolve(ReportItem r, bool violation) async {
+  Future<void> _resolve(PostReportItem r, bool violation) async {
     if (violation) {
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Xác nhận vi phạm?'),
           content: const Text(
-              'Bình luận sẽ bị ẩn với mọi người dùng (admin vẫn thấy ở dạng mờ). '
-              'Các báo cáo đang chờ của bình luận này cũng được chốt là vi phạm.'),
+              'Bài viết sẽ bị ẩn với mọi người dùng (admin vẫn thấy ở dạng mờ). '
+              'Các báo cáo đang chờ của bài viết này cũng được chốt là vi phạm.'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: _red),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Ẩn bình luận'),
+              child: const Text('Ẩn bài viết'),
             ),
           ],
         ),
@@ -157,29 +157,29 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
     }
     try {
       await widget.service.resolve(r, violation: violation);
-      _toast(violation ? 'Đã ẩn bình luận vi phạm' : 'Đã đánh dấu không vi phạm');
+      _toast(violation ? 'Đã ẩn bài viết vi phạm' : 'Đã đánh dấu không vi phạm');
       _load(silent: true);
     } catch (e) {
       _toast('Lỗi: $e');
     }
   }
 
-  /// Ẩn / hiện lại bình luận của một báo cáo đã xử lý.
-  Future<void> _toggleHidden(ReportItem r) async {
-    final hide = !r.commentHidden;
+  /// Ẩn / hiện lại bài viết của một báo cáo đã xử lý.
+  Future<void> _toggleHidden(PostReportItem r) async {
+    final hide = !r.postHidden;
     if (hide) {
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Ẩn bình luận?'),
+          title: const Text('Ẩn bài viết?'),
           content: const Text(
-              'Bình luận sẽ bị ẩn với mọi người dùng (admin vẫn thấy ở dạng mờ).'),
+              'Bài viết sẽ bị ẩn với mọi người dùng (admin vẫn thấy ở dạng mờ).'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: _red),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Ẩn bình luận'),
+              child: const Text('Ẩn bài viết'),
             ),
           ],
         ),
@@ -187,22 +187,21 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
       if (ok != true) return;
     }
     try {
-      await widget.forum.setCommentHidden(r.commentId, hidden: hide);
-      _toast(hide ? 'Đã ẩn bình luận' : 'Đã hiện lại bình luận');
+      await widget.forum.setPostHidden(r.postId, hidden: hide);
+      _toast(hide ? 'Đã ẩn bài viết' : 'Đã hiện lại bài viết');
       _load(silent: true);
     } catch (e) {
       _toast('Lỗi: $e');
     }
   }
 
-  Future<void> _openSource(ReportItem r) async {
-    final id = r.requestId;
-    if (id == null || id.isEmpty) {
-      _toast('Không tìm thấy bài viết của bình luận này');
+  Future<void> _openSource(PostReportItem r) async {
+    if (r.postId.isEmpty) {
+      _toast('Không tìm thấy bài viết');
       return;
     }
     try {
-      final post = await widget.forum.getPostDetail(id);
+      final post = await widget.forum.getPostDetail(r.postId);
       if (!mounted) return;
       if (post == null) {
         _toast('Bài viết không còn tồn tại');
@@ -211,12 +210,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => PostDetailPage(
-            initialPost: post,
-            service: widget.forum,
-            focusCommentId: r.commentId, // cuộn tới đúng bình luận bị báo cáo
-            canReport: false, // admin không báo cáo
-          ),
+          builder: (_) => PostDetailPage(initialPost: post, service: widget.forum),
         ),
       );
     } catch (e) {
@@ -245,7 +239,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       if (widget.embedded) ...[
-                        const PageTitle('QUẢN LÝ BÌNH LUẬN VI PHẠM'),
+                        const PageTitle('QUẢN LÝ BÀI VIẾT VI PHẠM'),
                         const SizedBox(height: 16),
                       ],
                       _stats(),
@@ -271,7 +265,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0.5,
-        title: const Text('Quản lý bình luận vi phạm',
+        title: const Text('Quản lý bài viết vi phạm',
             style: TextStyle(color: kFbBlue, fontWeight: FontWeight.w800)),
       ),
       body: body,
@@ -312,7 +306,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
       controller: _searchCtl,
       onChanged: (v) => setState(() => _keyword = v),
       decoration: InputDecoration(
-        hintText: 'Tìm kiếm nội dung bình luận, lý do...',
+        hintText: 'Tìm kiếm tiêu đề bài viết, lý do...',
         prefixIcon: const Icon(Icons.search, color: kFbText2, size: 20),
         suffixIcon: _keyword.isEmpty
             ? null
@@ -399,7 +393,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
     ]);
   }
 
-  Widget _content(List<ReportItem> items, bool wide) {
+  Widget _content(List<PostReportItem> items, bool wide) {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.all(40),
@@ -430,7 +424,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
   }
 
   // ---- Dạng bảng ----
-  Widget _table(List<ReportItem> items) {
+  Widget _table(List<PostReportItem> items) {
     const head = TextStyle(
         fontSize: 12, fontWeight: FontWeight.w700, color: kFbText2, letterSpacing: 0.5);
     return Container(
@@ -443,7 +437,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(children: [
-            const Expanded(flex: 5, child: Text('BÌNH LUẬN', style: head)),
+            const Expanded(flex: 5, child: Text('BÀI VIẾT', style: head)),
             const Expanded(flex: 4, child: Text('LÝ DO BÁO CÁO', style: head)),
             const Expanded(flex: 2, child: Text('NGƯỜI BÁO CÁO', style: head)),
             SizedBox(
@@ -472,8 +466,8 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
     );
   }
 
-  Widget _row(ReportItem r) {
-    final dim = r.effectivelyHidden;
+  Widget _row(PostReportItem r) {
+    final dim = r.postHidden;
     final color = dim ? kFbText2 : Colors.black87;
     Widget txt(String s, {bool bold = false, bool strike = false}) => Text(
           s,
@@ -492,7 +486,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
       child: Row(children: [
         Expanded(flex: 5, child: Padding(
           padding: const EdgeInsets.only(right: 8),
-          child: txt(r.commentContent, strike: dim),
+          child: txt(r.postTitle, strike: dim),
         )),
         Expanded(flex: 4, child: Padding(
           padding: const EdgeInsets.only(right: 8),
@@ -508,7 +502,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
   }
 
   // ---- Dạng thẻ ----
-  Widget _cards(List<ReportItem> items) => Column(
+  Widget _cards(List<PostReportItem> items) => Column(
         children: [
           for (final r in items)
             Container(
@@ -522,15 +516,15 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(r.commentContent,
+                    Text(r.postTitle,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: r.effectivelyHidden ? kFbText2 : Colors.black87,
+                          color: r.postHidden ? kFbText2 : Colors.black87,
                           decoration:
-                              r.effectivelyHidden ? TextDecoration.lineThrough : null,
+                              r.postHidden ? TextDecoration.lineThrough : null,
                         )),
                     const SizedBox(height: 6),
                     Text('Lý do: ${r.reason}', style: const TextStyle(fontSize: 13)),
@@ -550,7 +544,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
         ],
       );
 
-  Widget _viewBtn(ReportItem r) => InkWell(
+  Widget _viewBtn(PostReportItem r) => InkWell(
         onTap: () => _openSource(r),
         borderRadius: BorderRadius.circular(6),
         child: Container(
@@ -600,29 +594,16 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
   }
 
   /// Báo cáo đang chờ: duyệt (Không vi phạm / Vi phạm — ẩn).
-  /// Báo cáo đã xử lý: chốt rồi, chỉ còn ẩn / hiện lại bình luận.
-  Widget _menu(ReportItem r) {
+  /// Báo cáo đã xử lý: chốt rồi, chỉ còn ẩn / hiện lại bài viết.
+  Widget _menu(PostReportItem r) {
     final pending = r.status == ReportStatus.pending;
-        // Bình luận thuộc bài viết đang ẩn: không ẩn/hiện hay duyệt riêng lẻ được
-    if (r.postHidden) {
-      return PopupMenuButton<String>(
-        icon: const Icon(Icons.more_vert, color: kFbText2),
-        tooltip: 'Bài viết đang bị ẩn',
-        itemBuilder: (_) => const [
-          PopupMenuItem<String>(
-            enabled: false,
-            child: Text('Bài viết đang bị ẩn.\nHiện lại bài viết trước khi xử lý bình luận.'),
-          ),
-        ],
-      );
-    }
-    // Đã xử lý mà bình luận không còn (bị xóa) thì không còn thao tác nào
-    if (!pending && (!r.commentExists || !r.commentActive)) {
+    // Đã xử lý mà bài viết không còn (bị xóa) thì không còn thao tác nào
+    if (!pending && (!r.postExists)) {
       return const SizedBox.shrink();
     }
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, color: kFbText2),
-      tooltip: pending ? 'Duyệt báo cáo' : 'Quản lý bình luận',
+      tooltip: pending ? 'Duyệt báo cáo' : 'Quản lý bài viết',
       onSelected: (v) {
         if (v == 'ok') _resolve(r, false);
         if (v == 'bad') _resolve(r, true);
@@ -643,7 +624,7 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
                 child: Row(children: [
                   Icon(Icons.block, size: 18, color: _red),
                   SizedBox(width: 10),
-                  Text('Vi phạm — ẩn bình luận', style: TextStyle(color: _red)),
+                  Text('Vi phạm — ẩn bài viết', style: TextStyle(color: _red)),
                 ]),
               ),
             ]
@@ -651,11 +632,11 @@ class _ViolationCommentsPageState extends State<ViolationCommentsPage> {
               PopupMenuItem(
                 value: 'toggle',
                 child: Row(children: [
-                  Icon(r.commentHidden ? Icons.visibility : Icons.visibility_off,
-                      size: 18, color: r.commentHidden ? _green : _red),
+                  Icon(r.postHidden ? Icons.visibility : Icons.visibility_off,
+                      size: 18, color: r.postHidden ? _green : _red),
                   const SizedBox(width: 10),
-                  Text(r.commentHidden ? 'Hiện lại bình luận' : 'Ẩn bình luận',
-                      style: TextStyle(color: r.commentHidden ? _green : _red)),
+                  Text(r.postHidden ? 'Hiện lại bài viết' : 'Ẩn bài viết',
+                      style: TextStyle(color: r.postHidden ? _green : _red)),
                 ]),
               ),
             ],

@@ -1,6 +1,6 @@
 // lib/widgets/report_comment_dialog.dart
-// Hộp thoại "Báo cáo bình luận" (giống Facebook): chọn lý do rồi gửi.
-// Mỗi người chỉ báo cáo 1 bình luận được 1 lần (ForumService.reportComment kiểm tra).
+// Hộp thoại báo cáo (giống Facebook): chọn lý do rồi gửi. Dùng cho cả bình luận và bài viết.
+// Mỗi người chỉ báo cáo 1 bình luận / 1 bài viết được 1 lần (ForumService kiểm tra).
 import 'package:flutter/material.dart';
 
 import 'package:app_gdtm/models/forum_post.dart';
@@ -15,11 +15,43 @@ const List<String> kReportReasons = [
   'Khác',
 ];
 
-/// Trả về true nếu bình luận đã được báo cáo (vừa gửi xong hoặc đã báo cáo từ trước).
+/// Báo cáo một bình luận.
+/// Trả về true nếu đã báo cáo (vừa gửi xong hoặc đã báo cáo từ trước).
 Future<bool> showReportCommentDialog(
   BuildContext context, {
   required ForumService service,
   required CommentDTO comment,
+}) =>
+    showReportDialog(
+      context,
+      title: 'Báo cáo bình luận',
+      subtitle: 'Bình luận của ${comment.userName}',
+      preview: comment.content,
+      onSubmit: (reason) => service.reportComment(comment.id, reason),
+    );
+
+/// Báo cáo một bài viết.
+/// Trả về true nếu đã báo cáo (vừa gửi xong hoặc đã báo cáo từ trước).
+Future<bool> showReportPostDialog(
+  BuildContext context, {
+  required ForumService service,
+  required ForumPostDTO post,
+}) =>
+    showReportDialog(
+      context,
+      title: 'Báo cáo bài viết',
+      subtitle: 'Bài viết của ${post.userName}',
+      preview: post.subject,
+      onSubmit: (reason) => service.reportPost(post.id, reason),
+    );
+
+/// Hộp thoại chọn lý do dùng chung.
+Future<bool> showReportDialog(
+  BuildContext context, {
+  required String title,
+  required String subtitle,
+  required String preview,
+  required Future<void> Function(String reason) onSubmit,
 }) async {
   const other = 'Khác';
   String? selected;
@@ -35,7 +67,7 @@ Future<bool> showReportCommentDialog(
     barrierDismissible: false,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setD) => AlertDialog(
-        title: const Text('Báo cáo bình luận'),
+        title: Text(title),
         content: SizedBox(
           width: 400,
           child: SingleChildScrollView(
@@ -43,15 +75,14 @@ Future<bool> showReportCommentDialog(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Bình luận của ${comment.userName}',
-                    style: const TextStyle(color: kFbText2, fontSize: 13)),
+                Text(subtitle, style: const TextStyle(color: kFbText2, fontSize: 13)),
                 const SizedBox(height: 4),
-                Text(comment.content,
+                Text(preview,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontStyle: FontStyle.italic)),
                 const SizedBox(height: 8),
-                const Text('Vì sao bạn báo cáo bình luận này?',
+                const Text('Vì sao bạn báo cáo?',
                     style: TextStyle(fontWeight: FontWeight.w600)),
                 for (final r in kReportReasons)
                   RadioListTile<String>(
@@ -115,13 +146,12 @@ Future<bool> showReportCommentDialog(
                       error = null;
                     });
                     try {
-                      await service.reportComment(comment.id, reason);
+                      await onSubmit(reason);
                       done = true;
                       if (ctx.mounted) Navigator.pop(ctx);
                       messenger.showSnackBar(const SnackBar(
                           content: Text('Đã gửi báo cáo. Cảm ơn bạn!')));
                     } catch (e) {
-                      // Gồm cả lỗi "Bạn đã báo cáo bình luận này rồi"
                       // Đã báo cáo từ trước (vd. ở thiết bị khác) thì cũng coi là đã báo cáo
                       if (e.toString().contains('đã báo cáo')) done = true;
                       setD(() {

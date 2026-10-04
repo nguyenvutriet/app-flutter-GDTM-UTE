@@ -10,6 +10,7 @@ import 'package:app_gdtm/widgets/forum_utils.dart';
 import 'package:app_gdtm/widgets/post_card.dart';
 import 'package:app_gdtm/widgets/reactors_sheet.dart';
 import 'post_detail_page.dart';
+import 'package:app_gdtm/widgets/report_comment_dialog.dart';
 
 class ForumPage extends StatefulWidget {
   final ForumService service;
@@ -58,10 +59,13 @@ class _ForumPageState extends State<ForumPage> {
   String _sortBy = 'newest';
   String _keyword = '';
   String? _error;
+  bool _isAdmin = false;
+  final Set<String> _reportedPosts = {};
 
   @override
   void initState() {
     super.initState();
+    _loadMeta();
     _scroll.addListener(() {
       if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 400 &&
           _hasMore &&
@@ -112,6 +116,59 @@ class _ForumPageState extends State<ForumPage> {
       if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+    Future<void> _loadMeta() async {
+    try {
+      final admin = await widget.service.isAdmin();
+      final ids = (!admin && widget.canReport)
+          ? await widget.service.getMyReportedPostIds()
+          : <String>{};
+      if (!mounted) return;
+      setState(() {
+        _isAdmin = admin;
+        _reportedPosts.addAll(ids);
+      });
+    } catch (_) {}
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _reportPost(ForumPostDTO p) async {
+    final ok = await showReportPostDialog(context, service: widget.service, post: p);
+    if (ok && mounted) setState(() => _reportedPosts.add(p.id));
+  }
+
+  Future<void> _toggleHidden(ForumPostDTO p) async {
+    final hide = !p.isHidden;
+    if (hide) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Ẩn bài viết?'),
+          content: const Text(
+              'Bài viết sẽ không còn hiển thị với người dùng khác. '
+              'Bạn vẫn thấy ở dạng mờ và có thể hiện lại bất cứ lúc nào.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ẩn')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    try {
+      await widget.service.setPostHidden(p.id, hidden: hide);
+      _replace(p.id, (x) => x.copyWith(isHidden: hide));
+      _snack(hide ? 'Đã ẩn bài viết' : 'Đã hiện lại bài viết');
+    } catch (e) {
+      _snack(e.toString());
     }
   }
 

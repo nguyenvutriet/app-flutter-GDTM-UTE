@@ -131,6 +131,8 @@ class ForumPostDTO {
   final Map<String, int> reactions;
   final List<AttachmentDTO> attachments;
   final List<CommentDTO> comments;
+  final bool isHidden; //admin ẩn
+  final bool isMine; // ko tự report bài của mình
 
   const ForumPostDTO({
     required this.id,
@@ -146,6 +148,8 @@ class ForumPostDTO {
     this.reactions = const {},
     this.attachments = const [],
     this.comments = const [],
+    this.isHidden = false,
+    this.isMine = false,
   });
 
   String get reactionTypeLower => (reactionType ?? '').toLowerCase();
@@ -168,6 +172,7 @@ class ForumPostDTO {
     Map<String, int>? reactions,
     int? commentCount,
     List<CommentDTO>? comments,
+    bool ? isHidden,
   }) =>
       ForumPostDTO(
         id: id,
@@ -183,6 +188,8 @@ class ForumPostDTO {
         reactions: reactions ?? this.reactions,
         attachments: attachments,
         comments: comments ?? this.comments,
+        isHidden: isHidden ?? this.isHidden,
+        isMine: isMine,
       );
 }
 

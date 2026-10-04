@@ -28,6 +28,8 @@ import 'package:app_gdtm/pages/common/change_password_page.dart';
 import 'package:app_gdtm/pages/admin/category_management_page.dart';
 import 'package:app_gdtm/services/comment_report_service.dart';
 import 'package:app_gdtm/pages/admin/violation_comments_page.dart';
+import 'package:app_gdtm/services/post_report_service.dart';
+import 'package:app_gdtm/pages/admin/violation_posts_page.dart';
 
 /// Trang chủ dashboard: khung (header + menu) dùng chung,
 /// menu và nội dung đổi theo role và mục menu được chọn.
@@ -72,6 +74,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
   /// Service kiểm duyệt báo cáo bình luận (admin).
   late final CommentReportService _reportService = CommentReportService(
+    currentUserId: () => widget.user.id,
+  );
+
+  late final PostReportService _postReportService = PostReportService(
     currentUserId: () => widget.user.id,
   );
 
@@ -202,6 +208,11 @@ class _DashboardPageState extends State<DashboardPage> {
                 id: 'violation_comments',
                 title: 'Quản lý bình luận vi phạm',
                 icon: Icons.block,
+              ),
+              AppMenuItem(
+                id: 'violation_posts',
+                title: 'Quản lý bài viết vi phạm',
+                icon: Icons.flag,
               ),
               AppMenuItem(
                 id: 'manage_categories',
@@ -361,6 +372,13 @@ class _DashboardPageState extends State<DashboardPage> {
 
           case 'change_password':
             return _changePasswordPage();
+
+          case 'violation_posts':
+            return ViolationPostsPage(
+              service: _postReportService,
+              forum: _forum,
+              embedded: true,
+            );
 
           case 'violation_comments':
             return ViolationCommentsPage(

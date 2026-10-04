@@ -47,6 +47,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   /// Id các bình luận người dùng này đã báo cáo
   final Set<String> _reported = {};
+  bool _postReported = false;
 
   final Map<String, GlobalKey> _anchors = {};
   bool _scrolled = false;
@@ -88,7 +89,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
       final p = await widget.service.getPostDetail(widget.initialPost.id);
       if (!mounted) return;
       if (p == null) {
-        _snack('Bài viết không còn tồn tại');
+        _snack('Bài viết không còn tồn tại hoặc đã bị ẩn');
         Navigator.pop(context);
         return;
       }
@@ -182,7 +183,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
     if (!widget.canReport || _isAdmin) return;
     try {
       final ids = await widget.service.getMyReportedCommentIds();
-      if (mounted) setState(() => _reported.addAll(ids));
+      final postIds = await widget.service.getMyReportedPostIds();
+      if (mounted) {
+        setState(() {
+          _reported.addAll(ids);
+          _postReported = postIds.contains(widget.initialPost.id);
+        });
+      }
     } catch (_) {}
   }
 
@@ -191,6 +198,38 @@ class _PostDetailPageState extends State<PostDetailPage> {
     final reported = await showReportCommentDialog(
         context, service: widget.service, comment: c);
     if (reported && mounted) setState(() => _reported.add(c.id));
+  }
+
+    Future<void> _reportPost() async {
+    final ok = await showReportPostDialog(context, service: widget.service, post: _post);
+    if (ok && mounted) setState(() => _postReported = true);
+  }
+
+  Future<void> _toggleHiddenPost() async {
+    final hide = !_post.isHidden;
+    if (hide) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Ẩn bài viết?'),
+          content: const Text(
+              'Bài viết sẽ không còn hiển thị với người dùng khác. '
+              'Bạn vẫn thấy ở dạng mờ và có thể hiện lại bất cứ lúc nào.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ẩn')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    try {
+      await widget.service.setPostHidden(_post.id, hidden: hide);
+      _setPost(_post.copyWith(isHidden: hide));
+      _snack(hide ? 'Đã ẩn bài viết' : 'Đã hiện lại bài viết');
+    } catch (e) {
+      _snack(e.toString());
+    }
   }
 
   /// Admin ẩn / hiện lại bình luận.
@@ -280,12 +319,30 @@ class _PostDetailPageState extends State<PostDetailPage> {
               onShowReactors: () => showReactorsSheet(
                   context, () => widget.service.getPostReactors(_post.id)),
               onTapComments: () => _focus.requestFocus(),
+              onReport: (widget.canReport && !_isAdmin) ? _reportPost : null,
+              reported: _postReported,
+              onToggleHidden: _isAdmin ? _toggleHiddenPost : null,
             ),
             Container(
               color: Colors.white,
               margin: const EdgeInsets.only(top: 8),
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                if (_post.isHidden)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF4CC),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Bài viết đang bị ẩn nên các bình luận cũng bị ẩn. '
+                      'Hiện lại bài viết để ẩn/hiện từng bình luận.',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                  ),
                 const Text('Bình luận',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 8),
@@ -310,7 +367,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         onDelete: _deleteComment,
                         onReport: (widget.canReport && !_isAdmin) ? _reportComment : null,
                         reportedIds: _reported,
-                        onToggleHidden: _isAdmin ? _toggleHidden : null,
+                        onToggleHidden: (_isAdmin && !_post.isHidden) ? _toggleHidden : null,
+                        parentHidden: _post.isHidden,                        
                         highlightId: widget.focusCommentId,
                         anchors: _anchors,
                         onShowReactors: (c) => showReactorsSheet(
