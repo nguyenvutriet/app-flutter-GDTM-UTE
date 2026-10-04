@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'package:app_gdtm/models/enums/user_role.dart';
 import 'package:app_gdtm/models/Notification.dart' as app_notification;
@@ -9,10 +10,12 @@ import 'package:app_gdtm/models/Users.dart';
 import 'package:app_gdtm/widgets/app_colors.dart';
 import 'package:app_gdtm/widgets/app_menu.dart';
 import 'package:app_gdtm/widgets/app_shell.dart';
+import 'package:app_gdtm/widgets/chatbot_panel.dart';
 import 'package:app_gdtm/widgets/post_link.dart';
 import 'package:app_gdtm/pages/common/notification_page.dart';
 import 'package:app_gdtm/pages/login/login_page.dart';
 import 'package:app_gdtm/services/AuthService.dart';
+import 'package:app_gdtm/services/chatbot_service.dart';
 import 'package:app_gdtm/services/forum_service.dart';
 import 'package:app_gdtm/services/announcement_service.dart';
 import 'package:app_gdtm/services/CategoryService.dart';
@@ -28,6 +31,8 @@ import 'package:app_gdtm/pages/common/change_password_page.dart';
 import 'package:app_gdtm/pages/admin/category_management_page.dart';
 import 'package:app_gdtm/services/comment_report_service.dart';
 import 'package:app_gdtm/pages/admin/violation_comments_page.dart';
+import 'package:app_gdtm/services/post_report_service.dart';
+import 'package:app_gdtm/pages/admin/violation_posts_page.dart';
 
 /// Trang chủ dashboard: khung (header + menu) dùng chung,
 /// menu và nội dung đổi theo role và mục menu được chọn.
@@ -67,11 +72,33 @@ class _DashboardPageState extends State<DashboardPage> {
     currentUserId: () => widget.user.id,
   );
 
+  /// Trợ lý hỏi đáp về thông báo chung (Gemini).
+  /// API key đọc từ file .env (GEMINI_API_KEY=...), xem main.dart để biết cách nạp.
+  late final ChatbotService _chatbot = _createChatbot();
+
+  ChatbotService _createChatbot() {
+    final ready = dotenv.isInitialized;
+    final key = ready ? (dotenv.maybeGet('GEMINI_API_KEY') ?? '') : '';
+    final model = ready ? (dotenv.maybeGet('GEMINI_MODEL') ?? '').trim() : '';
+    final fallback =
+        ready ? (dotenv.maybeGet('GEMINI_FALLBACK_MODEL') ?? '').trim() : '';
+    return ChatbotService(
+      announcements: _announcements,
+      apiKey: key,
+      model: model.isEmpty ? ChatbotService.defaultModel : model,
+      fallbackModel: fallback.isEmpty ? null : fallback,
+    );
+  }
+
   /// Service danh mục (dùng cho trang quản lý danh mục của admin).
   final CategoryService _categoryService = CategoryService();
 
   /// Service kiểm duyệt báo cáo bình luận (admin).
   late final CommentReportService _reportService = CommentReportService(
+    currentUserId: () => widget.user.id,
+  );
+
+  late final PostReportService _postReportService = PostReportService(
     currentUserId: () => widget.user.id,
   );
 
@@ -202,6 +229,11 @@ class _DashboardPageState extends State<DashboardPage> {
                 id: 'violation_comments',
                 title: 'Quản lý bình luận vi phạm',
                 icon: Icons.block,
+              ),
+              AppMenuItem(
+                id: 'violation_posts',
+                title: 'Quản lý bài viết vi phạm',
+                icon: Icons.flag,
               ),
               AppMenuItem(
                 id: 'manage_categories',
@@ -362,6 +394,13 @@ class _DashboardPageState extends State<DashboardPage> {
           case 'change_password':
             return _changePasswordPage();
 
+          case 'violation_posts':
+            return ViolationPostsPage(
+              service: _postReportService,
+              forum: _forum,
+              embedded: true,
+            );
+
           case 'violation_comments':
             return ViolationCommentsPage(
               service: _reportService,
@@ -467,7 +506,24 @@ class _DashboardPageState extends State<DashboardPage> {
       // Người dùng đang đăng nhập
       user: widget.user,
 
-      child: _buildContent(),
+      // Nút chatbot nổi ở góc phải dưới, hiện trên mọi trang
+      child: Stack(
+        children: [
+          Positioned.fill(child: _buildContent()),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton(
+              heroTag: 'chatbot_fab',
+              tooltip: 'Hỏi trợ lý thông báo',
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              onPressed: () => showChatbotSheet(context, _chatbot),
+              child: const Icon(Icons.smart_toy_outlined),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

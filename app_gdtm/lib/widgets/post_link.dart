@@ -95,6 +95,9 @@ Future<ForumPostDTO> fetchPublicPost(ForumService forum, String postId) async {
   if (doc.data()?['postStatus'] != RequestService.postStatusPublic) {
     throw ForumException('Bài viết này không được công khai.');
   }
+  if (doc.data()?['isHidden'] == true && !await forum.isAdmin()) {
+    throw ForumException('Bài viết này đã bị ẩn.');
+  }
   final post = await forum.getPostDetail(postId);
   if (post == null) {
     throw ForumException('Bài viết không tồn tại hoặc đã bị xóa.');
@@ -174,7 +177,10 @@ Future<PostPreview> _fetchPreview(String postId) async {
     final db = FirebaseFirestore.instance;
     final doc = await db.collection(RequestService.requestsCollection).doc(postId).get();
     final m = doc.data();
-    if (!doc.exists || m == null || m['postStatus'] != RequestService.postStatusPublic) {
+    if (!doc.exists ||
+        m == null ||
+        m['postStatus'] != RequestService.postStatusPublic ||
+        m['isHidden'] == true) {      
       return PostPreview.unavailable(postId);
     }
 

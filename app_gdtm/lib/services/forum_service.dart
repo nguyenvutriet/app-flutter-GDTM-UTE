@@ -32,6 +32,7 @@ class ForumService {
   static const String departmentsCollection = 'department';
   static const String categoriesCollection = 'categories';
   static const String commentReportsCollection = 'commentreport';
+  static const String postReportsCollection = 'postreport';
 
   static const int _whereInLimit = 30;
 
@@ -81,20 +82,33 @@ class ForumService {
     String sortBy = 'newest',
   }) async {
     final uid = _uid;
-    Query<Map<String, dynamic>> q = _db
-        .collection(requestsCollection)
-        .where('postStatus', isEqualTo: RequestService.postStatusPublic)
-        .orderBy('timeCreate', descending: true)
-        .limit(limit);
-    if (startAfter != null) q = q.startAfterDocument(startAfter);
+    final admin = await isAdmin();
 
-    final snap = await q.get();
-    final posts = await _buildPosts(snap.docs, uid);
-    return PostPage(
-      posts: _sort(sortBy, posts),
-      lastDoc: snap.docs.isEmpty ? null : snap.docs.last,
-      hasMore: snap.docs.length == limit,
-    );
+    // Bài bị ẩn bị loại ở phía client; lấy tiếp trang kế để vẫn đủ số bài mỗi lần tải.
+    DocumentSnapshot<Map<String, dynamic>>? cursor = startAfter;
+    final visible = <DocumentSnapshot<Map<String, dynamic>>>[];
+    var hasMore = true;
+    var rounds = 0;
+    while (visible.length < limit && hasMore && rounds++ < 5) {
+      Query<Map<String, dynamic>> q = _db
+          .collection(requestsCollection)
+          .where('postStatus', isEqualTo: RequestService.postStatusPublic)
+          .orderBy('timeCreate', descending: true)
+          .limit(limit);
+      if (cursor != null) q = q.startAfterDocument(cursor);
+
+      final snap = await q.get();
+      if (snap.docs.isEmpty) {
+        hasMore = false;
+        break;
+      }
+      cursor = snap.docs.last;
+      hasMore = snap.docs.length == limit;
+      visible.addAll(snap.docs.where((d) => admin || !_isHidden(d.data())));
+    }
+
+    final posts = await _buildPosts(visible, uid);
+    return PostPage(posts: _sort(sortBy, posts), lastDoc: cursor, hasMore: hasMore);
   }
 
   /// getPostDetail (kèm cây bình luận) — null nếu không tồn tại.
@@ -102,6 +116,7 @@ class ForumService {
     final uid = _uid;
     final doc = await _db.collection(requestsCollection).doc(postId).get();
     if (!doc.exists) return null;
+    if (_isHidden(doc.data() ?? {}) && !await isAdmin()) return null;
     final posts = await _buildPosts([doc], uid, withComments: true);
     return posts.first;
   }
@@ -123,8 +138,10 @@ class ForumService {
     if (categoryId != null && categoryId.trim().isNotEmpty) {
       q = q.where('categoryIds', arrayContains: categoryId);
     }
+    final admin = await isAdmin();
     final snap = await q.limit(limit).get();
-    final posts = await _buildPosts(snap.docs, uid);
+    final docs = snap.docs.where((d) => admin || !_isHidden(d.data())).toList();
+    final posts = await _buildPosts(docs, uid);
     return _sort(sortBy, posts);
   }
 
@@ -137,6 +154,7 @@ class ForumService {
   }) async {
     final uid = _uid;
     final kw = keyword.trim().toLowerCase();
+    final admin = await isAdmin();
     if (kw.isEmpty) return [];
 
     final snap = await _db
@@ -148,6 +166,7 @@ class ForumService {
 
     final matched = snap.docs.where((d) {
       final m = d.data();
+      if (!admin && _isHidden(m)) return false;
       return (m['subject']?.toString() ?? '').toLowerCase().contains(kw) ||
           (m['description']?.toString() ?? '').toLowerCase().contains(kw);
     }).toList();
@@ -179,6 +198,84 @@ class ForumService {
       counts: countReactions(snap.docs.map((d) => d.data()['reactionType'])),
       currentType: current,
     );
+  }
+
+    // ==================================================================
+  // BÁO CÁO / ẨN BÀI VIẾT
+  // ==================================================================
+
+  /// Báo cáo bài viết. Doc id = "{userId}_{requestId}" nên mỗi người chỉ báo cáo
+  /// một bài được đúng 1 lần. Admin không báo cáo.
+  Future<void> reportPost(String postId, String reason) async {
+    final uid = _uid;
+    if (await isAdmin()) {
+      throw ForumException('Quản trị viên không thể báo cáo bài viết');
+    }
+    final text = reason.trim();
+    if (text.isEmpty) throw ForumException('Vui lòng chọn lý do báo cáo');
+
+    final pDoc = await _db.collection(requestsCollection).doc(postId).get();
+    if (!pDoc.exists) throw ForumException('Bài viết không còn tồn tại');
+    final m = pDoc.data() ?? {};
+    if (m['userId']?.toString() == uid) {
+      throw ForumException('Bạn không thể báo cáo bài viết của chính mình');
+    }
+    if (_isHidden(m)) throw ForumException('Bài viết này đã bị ẩn');
+
+    final ref = _db.collection(postReportsCollection).doc('${uid}_$postId');
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      if (snap.exists) throw ForumException('Bạn đã báo cáo bài viết này rồi');
+      tx.set(ref, {
+        'id': ref.id,
+        'reason': text,
+        'status': 'pending',
+        'requestId': postId,
+        'studentId': uid,
+        'createdAt': Timestamp.now(),
+      });
+    });
+  }
+
+  /// Id các bài viết mà người dùng hiện tại đã báo cáo.
+  Future<Set<String>> getMyReportedPostIds() async {
+    final uid = _uid;
+    final snap = await _db
+        .collection(postReportsCollection)
+        .where('studentId', isEqualTo: uid)
+        .get();
+    return snap.docs
+        .map((d) => d.data()['requestId']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+  }
+
+  /// Admin ẩn / hiện lại một bài viết bất kỳ.
+  /// Ẩn: báo cáo đang chờ -> "vi phạm". Hiện lại: báo cáo "vi phạm" -> "không vi phạm".
+  Future<void> setPostHidden(String postId, {required bool hidden}) async {
+    if (!await isAdmin()) {
+      throw ForumException('Chỉ quản trị viên mới được ẩn/hiện bài viết');
+    }
+    final ref = _db.collection(requestsCollection).doc(postId);
+    final doc = await ref.get();
+    if (!doc.exists) throw ForumException('Bài viết không còn tồn tại');
+
+    final reports = await _db
+        .collection(postReportsCollection)
+        .where('requestId', isEqualTo: postId)
+        .get();
+
+    final batch = _db.batch();
+    batch.update(ref, {'isHidden': hidden});
+    for (final r in reports.docs) {
+      final st = r.data()['status']?.toString() ?? 'pending';
+      if (hidden && st == 'pending') {
+        batch.update(r.reference, {'status': 'violation'});
+      } else if (!hidden && st == 'violation') {
+        batch.update(r.reference, {'status': 'not_violation'});
+      }
+    }
+    await batch.commit();
   }
 
   // ==================================================================
@@ -313,6 +410,16 @@ class ForumService {
     final ref = _db.collection(commentsCollection).doc(commentId);
     final doc = await ref.get();
     if (!doc.exists) throw ForumException('Bình luận không còn tồn tại');
+
+    // Bình luận thuộc bài viết đang bị ẩn thì không được ẩn/hiện riêng lẻ
+    final requestId = doc.data()?['requestId']?.toString() ?? '';
+    if (requestId.isNotEmpty) {
+      final post = await _db.collection(requestsCollection).doc(requestId).get();
+      if (_isHidden(post.data() ?? {})) {
+        throw ForumException(
+            'Bài viết đang bị ẩn. Hãy hiện lại bài viết trước khi ẩn/hiện bình luận.');
+      }
+    }
 
     final reports = await _db
         .collection(commentReportsCollection)
@@ -497,6 +604,8 @@ class ForumService {
                 ))
             .toList(),
         comments: tree,
+        isHidden: _isHidden(m),
+        isMine: m['userId']?.toString() == uid,
       );
     }).toList();
   }
