@@ -9,6 +9,7 @@ import 'package:app_gdtm/models/Request.dart';
 import 'package:app_gdtm/models/RequestStatusHistory.dart';
 import 'package:app_gdtm/models/Users.dart';
 import 'package:app_gdtm/services/CloudinaryService.dart';
+import 'feedback_status.dart';
 
 /// Kiểu riêng tư khi gửi góp ý.
 enum FeedbackPrivacy {
@@ -41,6 +42,10 @@ class RequestService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final CloudinaryService _cloudinary = CloudinaryService();
 
+  final FeedbackStatusContext
+    _statusContext =
+    FeedbackStatusContext();
+  
   /// Phòng ban mặc định khi sinh viên để trống: Phòng CTSV.
   /// Tìm theo tên có chứa "CTSV" hoặc "công tác sinh viên".
   static String? defaultDepartmentId(List<Department> departments) {
@@ -409,6 +414,538 @@ class RequestService {
     if (dot < 0 || dot == name.length - 1) return '';
     return name.substring(dot + 1).toLowerCase();
   }
+
+  
+// ============================================================
+// STAFF - LẤY DANH SÁCH GÓP Ý
+// ============================================================
+
+Future<List<Request>> getStaffFeedbacks({
+  required String role,
+  String? departmentId,
+}) async {
+  Query<Map<String, dynamic>> query =
+      _firestore.collection(requestsCollection);
+
+  // ADMIN xem tất cả
+  if (role != 'ROLE_ADMIN') {
+    if (departmentId == null ||
+        departmentId.trim().isEmpty) {
+      return [];
+    }
+
+    // STAFF chỉ xem request thuộc phòng ban mình
+    query = query.where(
+      'departmentId',
+      isEqualTo: departmentId,
+    );
+  }
+
+  final snapshot = await query.get();
+
+  final requests = snapshot.docs
+      .map(
+        (doc) => Request.fromFirestore(doc),
+      )
+      .toList();
+
+  // Sort mới nhất trước
+  requests.sort((a, b) {
+    final aTime =
+        a.timeCreate ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+
+    final bTime =
+        b.timeCreate ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+
+    return bTime.compareTo(aTime);
+  });
+
+  return requests;
+}
+
+// ============================================================
+// STAFF - DASHBOARD
+// ============================================================
+
+Future<Map<String, dynamic>> getStaffDashboard({
+  required String role,
+  String? departmentId,
+}) async {
+  try {
+    // Lấy danh sách request theo quyền của Staff/Admin
+    final requests = await getStaffFeedbacks(
+      role: role,
+      departmentId: departmentId,
+    );
+
+    int pending = 0;
+    int approved = 0;
+    int resolved = 0;
+    int rejected = 0;
+    int forwarding = 0;
+
+    for (final request in requests) {
+      switch (request.currentStatus) {
+        case 'PENDING':
+          pending++;
+          break;
+
+        case 'APPROVED':
+          approved++;
+          break;
+
+        case 'RESOLVED':
+          resolved++;
+          break;
+
+        case 'REJECTED':
+          rejected++;
+          break;
+
+        case 'FORWARDING':
+          forwarding++;
+          break;
+      }
+    }
+
+    return {
+      'total': requests.length,
+      'pending': pending,
+      'approved': approved,
+      'resolved': resolved,
+      'rejected': rejected,
+      'forwarding': forwarding,
+
+      // Lấy tối đa 5 request mới nhất
+      'recentRequests': requests.take(5).toList(),
+    };
+  } catch (e) {
+    print('Lỗi getStaffDashboard: $e');
+
+    rethrow;
+  }
+}
+
+// ============================================================
+// STAFF - TÌM KIẾM
+// ============================================================
+
+Future<List<Request>> searchStaffFeedbacks({
+  required String keyword,
+  required String role,
+  String? departmentId,
+}) async {
+  final requests =
+      await getStaffFeedbacks(
+    role: role,
+    departmentId: departmentId,
+  );
+
+  final value =
+      keyword.trim().toLowerCase();
+
+  if (value.isEmpty) {
+    return requests;
+  }
+
+  return requests.where((request) {
+    final subject =
+        request.subject
+                ?.toLowerCase() ??
+            '';
+
+    final description =
+        request.description
+                ?.toLowerCase() ??
+            '';
+
+    final location =
+        request.location
+                ?.toLowerCase() ??
+            '';
+
+    return subject.contains(value) ||
+        description.contains(value) ||
+        location.contains(value);
+  }).toList();
+}
+
+// ============================================================
+// STAFF - LỌC STATUS
+// ============================================================
+
+Future<List<Request>> filterStaffByStatus({
+  required String status,
+  required String role,
+  String? departmentId,
+}) async {
+  if (status == 'ALL') {
+    return getStaffFeedbacks(
+      role: role,
+      departmentId: departmentId,
+    );
+  }
+
+  Query<Map<String, dynamic>> query =
+      _firestore
+          .collection(requestsCollection)
+          .where(
+            'currentStatus',
+            isEqualTo: status,
+          );
+
+  if (role != 'ROLE_ADMIN') {
+    if (departmentId == null ||
+        departmentId.trim().isEmpty) {
+      return [];
+    }
+
+    query = query.where(
+      'departmentId',
+      isEqualTo: departmentId,
+    );
+  }
+
+  final snapshot = await query.get();
+
+  final requests = snapshot.docs
+      .map(
+        (doc) => Request.fromFirestore(doc),
+      )
+      .toList();
+
+  requests.sort((a, b) {
+    final aTime =
+        a.timeCreate ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+
+    final bTime =
+        b.timeCreate ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+
+    return bTime.compareTo(aTime);
+  });
+
+  return requests;
+}
+
+// ============================================================
+// STAFF - LỌC CATEGORY
+// ============================================================
+
+Future<List<Request>> filterStaffByCategory({
+  required String categoryId,
+  required String role,
+  String? departmentId,
+}) async {
+  Query<Map<String, dynamic>> query =
+      _firestore
+          .collection(requestsCollection)
+          .where(
+            'categoryIds',
+            arrayContains: categoryId,
+          );
+
+  if (role != 'ROLE_ADMIN') {
+    if (departmentId == null ||
+        departmentId.trim().isEmpty) {
+      return [];
+    }
+
+    query = query.where(
+      'departmentId',
+      isEqualTo: departmentId,
+    );
+  }
+
+  final snapshot = await query.get();
+
+  final requests = snapshot.docs
+      .map(
+        (doc) => Request.fromFirestore(doc),
+      )
+      .toList();
+
+  requests.sort((a, b) {
+    final aTime =
+        a.timeCreate ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+
+    final bTime =
+        b.timeCreate ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+
+    return bTime.compareTo(aTime);
+  });
+
+  return requests;
+}
+
+// ============================================================
+// STAFF - CẬP NHẬT TRẠNG THÁI
+// ============================================================
+
+Future<void> updateStaffStatus({
+  required String requestId,
+  required String newStatus,
+  required String staffUserId,
+}) async {
+  final requestRef = _firestore
+      .collection(requestsCollection)
+      .doc(requestId);
+
+  final snapshot =
+      await requestRef.get();
+
+  if (!snapshot.exists) {
+    throw StateError(
+      'Không tìm thấy góp ý.',
+    );
+  }
+
+  final request =
+      Request.fromFirestore(snapshot);
+
+  final currentStatus =
+      request.currentStatus;
+
+  // Kiểm tra State Pattern
+  if (!_statusContext.canChange(
+    currentStatus,
+    newStatus,
+  )) {
+    throw StateError(
+      'Không thể chuyển từ '
+      '$currentStatus sang $newStatus.',
+    );
+  }
+
+  final now = DateTime.now();
+
+  final historyRef = _firestore
+      .collection(statusHistoryCollection)
+      .doc();
+
+  final batch =
+      _firestore.batch();
+
+  // ----------------------------------------------------------
+  // 1. Update request
+  // ----------------------------------------------------------
+
+  batch.update(
+    requestRef,
+    {
+      'currentStatus': newStatus,
+    },
+  );
+
+  // ----------------------------------------------------------
+  // 2. Create status history
+  // ----------------------------------------------------------
+
+  batch.set(
+    historyRef,
+    {
+      'id': historyRef.id,
+      'status': newStatus,
+      'createAt':
+          Timestamp.fromDate(now),
+      'requestId': requestId,
+    },
+  );
+
+  // ----------------------------------------------------------
+  // 3. Notification cho sinh viên
+  // ----------------------------------------------------------
+
+  final notificationRef =
+      _firestore
+          .collection(
+            notificationsCollection,
+          )
+          .doc();
+
+  batch.set(
+    notificationRef,
+    {
+      'id':
+          notificationRef.id,
+
+      'title':
+          'Cập nhật trạng thái góp ý',
+
+      'content':
+          'Góp ý "${request.subject ?? ''}" '
+          'đã chuyển sang trạng thái '
+          '$newStatus.',
+
+      'notificationType':
+          'REQUEST_STATUS_CHANGED',
+
+      'isRead':
+          false,
+
+      'createAt':
+          Timestamp.fromDate(now),
+
+      'departmentId':
+          request.departmentId,
+
+      'requestId':
+          requestId,
+
+      'userId':
+          request.userId,
+    },
+  );
+
+  await batch.commit();
+}
+
+// ============================================================
+// STAFF - FORWARD REQUEST
+// ============================================================
+
+Future<void> forwardRequest({
+  required String requestId,
+  required String toDepartmentId,
+  required String staffUserId,
+  String? note,
+}) async {
+  final requestRef = _firestore
+      .collection(requestsCollection)
+      .doc(requestId);
+
+  final snapshot =
+      await requestRef.get();
+
+  if (!snapshot.exists) {
+    throw StateError(
+      'Không tìm thấy góp ý.',
+    );
+  }
+
+  final request =
+      Request.fromFirestore(snapshot);
+
+  final fromDepartmentId =
+      request.departmentId;
+
+  if (fromDepartmentId ==
+      toDepartmentId) {
+    throw StateError(
+      'Không thể chuyển đến cùng phòng ban.',
+    );
+  }
+
+  final now = DateTime.now();
+
+  final historyRef =
+      _firestore
+          .collection(
+            statusHistoryCollection,
+          )
+          .doc();
+
+  final batch =
+      _firestore.batch();
+
+  // ----------------------------------------------------------
+  // 1. Chuyển phòng ban
+  // ----------------------------------------------------------
+
+  batch.update(
+    requestRef,
+    {
+      'departmentId':
+          toDepartmentId,
+
+      // Sau khi chuyển:
+      // PENDING
+      'currentStatus':
+          'PENDING',
+    },
+  );
+
+  // ----------------------------------------------------------
+  // 2. Status history
+  // ----------------------------------------------------------
+
+  batch.set(
+    historyRef,
+    {
+      'id':
+          historyRef.id,
+
+      'status':
+          'FORWARDING',
+
+      'createAt':
+          Timestamp.fromDate(now),
+
+      'requestId':
+          requestId,
+    },
+  );
+
+  // ----------------------------------------------------------
+  // 3. Notification phòng ban mới
+  // ----------------------------------------------------------
+
+  final notificationRef =
+      _firestore
+          .collection(
+            notificationsCollection,
+          )
+          .doc();
+
+  batch.set(
+    notificationRef,
+    {
+      'id':
+          notificationRef.id,
+
+      'title':
+          'Có góp ý được chuyển đến',
+
+      'content':
+          'Góp ý "${request.subject ?? ''}" '
+          'đã được chuyển đến phòng ban.',
+
+      'notificationType':
+          'REQUEST_FORWARDED',
+
+      'isRead':
+          false,
+
+      'createAt':
+          Timestamp.fromDate(now),
+
+      'departmentId':
+          toDepartmentId,
+
+      'requestId':
+          requestId,
+
+      'userId':
+          null,
+
+      'fromDepartmentId':
+          fromDepartmentId,
+
+      'forwardedBy':
+          staffUserId,
+
+      'note':
+          note ?? '',
+    },
+  );
+
+  await batch.commit();
+}
 }
 
 class FeedbackDetails {
