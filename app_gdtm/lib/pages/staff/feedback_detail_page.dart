@@ -11,6 +11,7 @@ import 'package:app_gdtm/models/Message.dart';
 import 'package:app_gdtm/services/RequestService.dart';
 import 'package:app_gdtm/pages/staff/staff_conversation_dialog.dart';
 
+
 class FeedbackDetailPage extends StatefulWidget {
   final Request request;
   final String role;
@@ -2493,4 +2494,6 @@ String _formatFileSize(
   }
 
   return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+
 }
+

@@ -415,7 +415,32 @@ class RequestService {
     return name.substring(dot + 1).toLowerCase();
   }
 
-  
+  Stream<List<Request>> watchStaffFeedbacks({
+  required String role,
+  String? departmentId,
+}) {
+  Query<Map<String, dynamic>> query =
+      _firestore.collection(requestsCollection);
+
+  if (role != 'ROLE_ADMIN') {
+    if (departmentId == null || departmentId.trim().isEmpty) {
+      return Stream.value([]);
+    }
+
+    query = query.where(
+      'departmentId',
+      isEqualTo: departmentId,
+    );
+  }
+
+  return query.snapshots().map((snapshot) {
+    final requests = snapshot.docs
+        .map((doc) => Request.fromFirestore(doc))
+        .toList();
+
+    return requests;
+  });
+}
 // ============================================================
 // STAFF - LẤY DANH SÁCH GÓP Ý
 // ============================================================
