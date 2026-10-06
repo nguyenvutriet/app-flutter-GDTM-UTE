@@ -15,6 +15,7 @@ import '../../models/RequestStatusHistory.dart';
 
 import '../../services/RequestService.dart';
 import '../../services/CategoryService.dart';
+import 'staff_conversation_dialog.dart';
 
 class StaffListPage extends StatefulWidget {
 
@@ -2666,17 +2667,14 @@ class _StaffFeedbackDetailDialogState
   }
 
   Future<void> _openMessages() async {
-
-    final conversations = _details?.conversations ?? <ClarificationConversation>[];
-
+    // Trao đổi do StaffConversationDialog tự tải theo thời gian thực.
     await showDialog(
-
       context: context,
-
-      builder: (_) => _ConversationDialog(conversations: conversations),
-
+      builder: (_) => StaffConversationDialog(
+        request: _request,
+        staffUserId: widget.staffUserId,
+      ),
     );
-
   }
 
   Widget _buildHistory() {
