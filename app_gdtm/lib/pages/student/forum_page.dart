@@ -253,6 +253,9 @@ class _ForumPageState extends State<ForumPage> {
               onShowReactors: () => showReactorsSheet(
                   context, () => widget.service.getPostReactors(p.id)),
               onOpen: () => _openDetail(p),
+              onReport: (widget.canReport && !_isAdmin) ? () => _reportPost(p) : null,
+              reported: _reportedPosts.contains(p.id),
+              onToggleHidden: _isAdmin ? () => _toggleHidden(p) : null,
             );
           }
           return _footer();
