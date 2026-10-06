@@ -1,18 +1,32 @@
 import 'package:flutter/material.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
 
 
 import 'package:app_gdtm/models/Department.dart';
 
+
+
 import 'package:app_gdtm/models/FileAttachment.dart';
+
+
 
 import 'package:app_gdtm/models/Request.dart';
 
+
+
 import 'package:app_gdtm/models/RequestStatusHistory.dart';
+
+
 
 import 'package:app_gdtm/models/ClarificationConversation.dart';
 
+
+
 import 'package:app_gdtm/models/Message.dart';
+
+
 
 import 'package:app_gdtm/services/RequestService.dart';
 
@@ -20,51 +34,83 @@ import 'package:app_gdtm/services/RequestService.dart';
 
 class FeedbackDetailPage extends StatefulWidget {
 
-  final Request request;
 
-  final String role;
 
-  final String? departmentId;
+final Request request;
 
 
 
-  /// Danh sách phòng ban dùng cho chức năng chuyển góp ý.
-
-  ///
-
-  /// Nếu chưa có dữ liệu phòng ban thì truyền [].
-
-  final List<Department> departments;
+final String role;
 
 
 
-  /// ID tài khoản Staff hiện tại.
-
-  final String staffUserId;
+final String? departmentId;
 
 
 
-  const FeedbackDetailPage({
-
-    super.key,
-
-    required this.request,
-
-    required this.role,
-
-    required this.staffUserId,
-
-    this.departmentId,
-
-    this.departments = const [],
-
-  });
+/// Danh sách phòng ban dùng cho chức năng chuyển góp ý.
 
 
 
-  @override
+///
 
-  State<FeedbackDetailPage> createState() => _FeedbackDetailPageState();
+
+
+/// Nếu chưa có dữ liệu phòng ban thì truyền [].
+
+
+
+final List<Department> departments;
+
+
+
+/// ID tài khoản Staff hiện tại.
+
+
+
+final String staffUserId;
+
+
+
+const FeedbackDetailPage({
+
+
+
+super.key,
+
+
+
+required this.request,
+
+
+
+required this.role,
+
+
+
+required this.staffUserId,
+
+
+
+this.departmentId,
+
+
+
+this.departments = const [],
+
+
+
+});
+
+
+
+@override
+
+
+
+State<FeedbackDetailPage> createState() => _FeedbackDetailPageState();
+
+
 
 }
 
@@ -72,735 +118,1171 @@ class FeedbackDetailPage extends StatefulWidget {
 
 class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
-  final RequestService _requestService = RequestService();
 
 
+final RequestService _requestService = RequestService();
 
-  bool _isLoading = true;
 
-  bool _isUpdatingStatus = false;
 
-  bool _isForwarding = false;
+bool _isLoading = true;
 
 
 
-  late Request _request;
+bool _isUpdatingStatus = false;
 
 
 
-  FeedbackDetails _details = const FeedbackDetails();
+bool _isForwarding = false;
 
 
 
-  String? _selectedStatus;
+late Request _request;
 
-  String? _selectedDepartmentId;
 
 
+FeedbackDetails _details = const FeedbackDetails();
 
-  final TextEditingController _forwardNoteController =
 
-      TextEditingController();
 
+String? _selectedStatus;
 
 
-  @override
 
-  void initState() {
+String? _selectedDepartmentId;
 
-    super.initState();
 
 
+final TextEditingController _forwardNoteController =
 
-    _request = widget.request;
 
 
+TextEditingController();
 
-    _loadDetails();
 
-  }
 
+@override
 
 
-  @override
 
-  void dispose() {
+void initState() {
 
-    _forwardNoteController.dispose();
 
-    super.dispose();
 
-  }
+super.initState();
 
 
 
-  // ============================================================
+_request = widget.request;
 
-  // LOAD DETAIL
 
-  // ============================================================
 
+_loadDetails();
 
 
-  Future<void> _loadDetails() async {
 
-    setState(() {
+}
 
-      _isLoading = true;
 
-    });
 
+@override
 
 
-    try {
 
-      final details = await _requestService.getFeedbackDetails(_request);
+void dispose() {
 
 
 
-      if (!mounted) return;
+_forwardNoteController.dispose();
 
 
 
-      setState(() {
+super.dispose();
 
-        _details = details;
 
-        _selectedStatus = null;
 
-      });
+}
 
-    } catch (e) {
 
-      if (!mounted) return;
 
+// ============================================================
 
 
-      ScaffoldMessenger.of(context).showSnackBar(
 
-        SnackBar(
+// LOAD DETAIL
 
-          content: Text(
 
-            'Không thể tải chi tiết góp ý: $e',
 
-          ),
+// ============================================================
 
-        ),
 
-      );
 
-    } finally {
+Future<void> _loadDetails() async {
 
-      if (!mounted) return;
 
 
+setState(() {
 
-      setState(() {
 
-        _isLoading = false;
 
-      });
+_isLoading = true;
 
-    }
 
-  }
 
+});
 
 
-  // ============================================================
 
-  // UPDATE STATUS
+try {
 
-  // ============================================================
 
 
+final details = await _requestService.getFeedbackDetails(_request);
 
-  Future<void> _updateStatus() async {
 
-    final newStatus = _selectedStatus;
 
+if (!mounted) return;
 
 
-    if (newStatus == null || newStatus.isEmpty) {
 
-      _showMessage('Vui lòng chọn trạng thái mới.');
+setState(() {
 
-      return;
 
-    }
 
+_details = details;
 
 
-    final requestId = _request.id;
 
+_selectedStatus = null;
 
 
-    if (requestId == null || requestId.isEmpty) {
 
-      _showMessage('Góp ý không hợp lệ.');
+});
 
-      return;
 
-    }
 
+} catch (e) {
 
 
-    if (newStatus == _request.currentStatus) {
 
-      _showMessage('Trạng thái mới giống trạng thái hiện tại.');
+if (!mounted) return;
 
-      return;
 
-    }
 
+ScaffoldMessenger.of(context).showSnackBar(
 
 
-    setState(() {
 
-      _isUpdatingStatus = true;
+SnackBar(
 
-    });
 
 
+content: Text(
 
-    try {
 
-      await _requestService.updateStaffStatus(
 
-        requestId: requestId,
+'Không thể tải chi tiết góp ý: $e',
 
-        newStatus: newStatus,
 
-        staffUserId: widget.staffUserId,
 
-      );
+),
 
 
 
-      if (!mounted) return;
+),
 
 
 
-      setState(() {
+);
 
-        _request = _copyRequestWithStatus(
 
-          _request,
 
-          newStatus,
+} finally {
 
-        );
 
-        _selectedStatus = null;
 
-      });
+if (!mounted) return;
 
 
 
-      await _loadDetails();
+setState(() {
 
 
 
-      if (!mounted) return;
+_isLoading = false;
 
 
 
-      _showMessage(
+});
 
-        'Đã cập nhật trạng thái thành ${_statusLabel(newStatus)}.',
 
-      );
 
-    } catch (e) {
+}
 
-      if (!mounted) return;
 
 
+}
 
-      _showMessage(
 
-        'Không thể cập nhật trạng thái: $e',
 
-        isError: true,
+// ============================================================
 
-      );
 
-    } finally {
 
-      if (!mounted) return;
+// UPDATE STATUS
 
 
 
-      setState(() {
+// ============================================================
 
-        _isUpdatingStatus = false;
 
-      });
 
-    }
+Future<void> _updateStatus() async {
 
-  }
 
 
+final newStatus = _selectedStatus;
 
-  // ============================================================
 
-  // FORWARD REQUEST
 
-  // ============================================================
+if (newStatus == null || newStatus.isEmpty) {
 
 
 
-  Future<void> _forwardRequest() async {
+_showMessage('Vui lòng chọn trạng thái mới.');
 
-    final requestId = _request.id;
 
 
+return;
 
-    if (requestId == null || requestId.isEmpty) {
 
-      _showMessage('Góp ý không hợp lệ.');
 
-      return;
+}
 
-    }
 
 
+final requestId = _request.id;
 
-    final toDepartmentId = _selectedDepartmentId;
 
 
+if (requestId == null || requestId.isEmpty) {
 
-    if (toDepartmentId == null || toDepartmentId.isEmpty) {
 
-      _showMessage('Vui lòng chọn phòng ban cần chuyển đến.');
 
-      return;
+_showMessage('Góp ý không hợp lệ.');
 
-    }
 
 
+return;
 
-    if (toDepartmentId == _request.departmentId) {
 
-      _showMessage(
 
-        'Không thể chuyển đến cùng phòng ban hiện tại.',
+}
 
-        isError: true,
 
-      );
 
-      return;
+if (newStatus == _request.currentStatus) {
 
-    }
 
 
+_showMessage('Trạng thái mới giống trạng thái hiện tại.');
 
-    setState(() {
 
-      _isForwarding = true;
 
-    });
+return;
 
 
 
-    try {
+}
 
-      await _requestService.forwardRequest(
 
-        requestId: requestId,
 
-        toDepartmentId: toDepartmentId,
+setState(() {
 
-        staffUserId: widget.staffUserId,
 
-        note: _forwardNoteController.text.trim(),
 
-      );
+_isUpdatingStatus = true;
 
 
 
-      if (!mounted) return;
+});
 
 
 
-      setState(() {
+try {
 
-        _request = _copyRequestWithDepartment(
 
-          _request,
 
-          toDepartmentId,
+await _requestService.updateStaffStatus(
 
-        );
 
 
+requestId: requestId,
 
-        _selectedDepartmentId = null;
 
-        _forwardNoteController.clear();
 
-      });
+newStatus: newStatus,
 
 
 
-      await _loadDetails();
+staffUserId: widget.staffUserId,
 
 
 
-      if (!mounted) return;
+);
 
 
 
-      _showMessage('Đã chuyển góp ý sang phòng ban mới.');
+if (!mounted) return;
 
-    } catch (e) {
 
-      if (!mounted) return;
 
+setState(() {
 
 
-      _showMessage(
 
-        'Không thể chuyển góp ý: $e',
+_request = _copyRequestWithStatus(
 
-        isError: true,
 
-      );
 
-    } finally {
+_request,
 
-      if (!mounted) return;
 
 
+newStatus,
 
-      setState(() {
 
-        _isForwarding = false;
 
-      });
+);
 
-    }
 
-  }
 
+_selectedStatus = null;
 
 
-  // ============================================================
 
-  // COPY REQUEST
+});
 
-  // ============================================================
 
 
+await _loadDetails();
 
-  Request _copyRequestWithStatus(
 
-    Request request,
 
-    String status,
+if (!mounted) return;
 
-  ) {
 
-    return request.copyWith(
 
-      currentStatus: status,
+_showMessage(
 
-    );
 
-  }
 
+'Đã cập nhật trạng thái thành ${_statusLabel(newStatus)}.',
 
 
-  Request _copyRequestWithDepartment(
 
-    Request request,
+);
 
-    String departmentId,
 
-  ) {
 
-    return request.copyWith(
+} catch (e) {
 
-      departmentId: departmentId,
 
-      currentStatus: 'PENDING',
 
-    );
+if (!mounted) return;
 
-  }
 
 
+_showMessage(
 
-  // ============================================================
 
-  // MESSAGE
 
-  // ============================================================
+'Không thể cập nhật trạng thái: $e',
 
 
 
-  void _showMessage(
+isError: true,
 
-    String message, {
 
-    bool isError = false,
 
-  }) {
+);
 
-    ScaffoldMessenger.of(context).showSnackBar(
 
-      SnackBar(
 
-        content: Text(message),
+} finally {
 
-        backgroundColor: isError ? Colors.red : null,
 
-      ),
 
-    );
+if (!mounted) return;
 
-  }
 
 
+setState(() {
 
-  // ============================================================
 
-  // BUILD
 
-  // ============================================================
+_isUpdatingStatus = false;
 
 
 
-  @override
+});
 
-  Widget build(BuildContext context) {
 
-    return Scaffold(
 
-      appBar: AppBar(
+}
 
-        title: const Text('Chi tiết góp ý'),
 
-        centerTitle: true,
 
-        actions: [
+}
 
-          IconButton(
 
-            onPressed: _loadDetails,
 
-            icon: const Icon(Icons.refresh),
+// ============================================================
 
-            tooltip: 'Làm mới',
 
-          ),
 
-        ],
+// FORWARD REQUEST
 
-      ),
 
-      body: _isLoading
 
-          ? const Center(
+// ============================================================
 
-              child: CircularProgressIndicator(),
 
-            )
 
-          : RefreshIndicator(
+Future<void> _forwardRequest() async {
 
-              onRefresh: _loadDetails,
 
-              child: ListView(
 
-                padding: const EdgeInsets.all(16),
+final requestId = _request.id;
 
-                children: [
 
-                  _buildBasicInformation(),
 
+if (requestId == null || requestId.isEmpty) {
 
 
-                  const SizedBox(height: 16),
 
+_showMessage('Góp ý không hợp lệ.');
 
 
-                  _buildStatusSection(),
 
+return;
 
 
-                  const SizedBox(height: 16),
 
+}
 
 
-                  _buildAttachmentsSection(),
 
+final toDepartmentId = _selectedDepartmentId;
 
 
-                  const SizedBox(height: 16),
 
+if (toDepartmentId == null || toDepartmentId.isEmpty) {
 
 
-                  _buildHistorySection(),
 
+_showMessage('Vui lòng chọn phòng ban cần chuyển đến.');
 
 
-                  const SizedBox(height: 16),
 
+return;
 
 
-                  _buildConversationSection(),
 
+}
 
 
-                  const SizedBox(height: 16),
 
+if (toDepartmentId == _request.departmentId) {
 
 
-                  _buildForwardSection(),
 
+_showMessage(
 
 
-                  const SizedBox(height: 24),
 
-                ],
+'Không thể chuyển đến cùng phòng ban hiện tại.',
 
-              ),
 
-            ),
 
-    );
+isError: true,
 
-  }
 
 
+);
 
-  // ============================================================
 
-  // BASIC INFORMATION
 
-  // ============================================================
+return;
 
 
 
-  Widget _buildBasicInformation() {
+}
 
-    final request = _request;
 
 
+setState(() {
 
-    return Card(
 
-      elevation: 2,
 
-      child: Padding(
+_isForwarding = true;
 
-        padding: const EdgeInsets.all(16),
 
-        child: Column(
 
-          crossAxisAlignment: CrossAxisAlignment.start,
+});
 
-          children: [
 
-            const Text(
 
-              'Thông tin góp ý',
+try {
 
-              style: TextStyle(
 
-                fontSize: 20,
 
-                fontWeight: FontWeight.bold,
+await _requestService.forwardRequest(
 
-              ),
 
-            ),
 
+requestId: requestId,
 
 
-            const SizedBox(height: 16),
 
+toDepartmentId: toDepartmentId,
 
 
-            _buildInfoRow(
 
-              icon: Icons.subject,
+staffUserId: widget.staffUserId,
 
-              title: 'Tiêu đề',
 
-              value: request.subject ?? 'Không có',
 
-            ),
+note: _forwardNoteController.text.trim(),
 
 
 
-            const SizedBox(height: 12),
+);
 
 
 
-            _buildInfoRow(
+if (!mounted) return;
 
-              icon: Icons.description_outlined,
 
-              title: 'Nội dung',
 
-              value: request.description ?? 'Không có',
+setState(() {
 
-            ),
 
 
+_request = _copyRequestWithDepartment(
 
-            if (request.location != null &&
 
-                request.location!.trim().isNotEmpty) ...[
 
-              const SizedBox(height: 12),
+_request,
 
-              _buildInfoRow(
 
-                icon: Icons.location_on_outlined,
 
-                title: 'Địa điểm',
+toDepartmentId,
 
-                value: request.location!,
 
-              ),
 
-            ],
+);
 
 
 
-            const SizedBox(height: 12),
+_selectedDepartmentId = null;
 
 
 
-            _buildInfoRow(
+_forwardNoteController.clear();
 
-              icon: Icons.access_time,
 
-              title: 'Thời gian gửi',
 
-              value: _formatDate(request.timeCreate),
+});
 
-            ),
 
 
+await _loadDetails();
 
-            const SizedBox(height: 12),
 
 
+if (!mounted) return;
 
-            _buildInfoRow(
+
+
+_showMessage('Đã chuyển góp ý sang phòng ban mới.');
+
+
+
+} catch (e) {
+
+
+
+if (!mounted) return;
+
+
+
+_showMessage(
+
+
+
+'Không thể chuyển góp ý: $e',
+
+
+
+isError: true,
+
+
+
+);
+
+
+
+} finally {
+
+
+
+if (!mounted) return;
+
+
+
+setState(() {
+
+
+
+_isForwarding = false;
+
+
+
+});
+
+
+
+}
+
+
+
+}
+
+
+
+// ============================================================
+
+
+
+// COPY REQUEST
+
+
+
+// ============================================================
+
+
+
+Request _copyRequestWithStatus(
+
+
+
+Request request,
+
+
+
+String status,
+
+
+
+) {
+
+
+
+return request.copyWith(
+
+
+
+currentStatus: status,
+
+
+
+);
+
+
+
+}
+
+
+
+Request _copyRequestWithDepartment(
+
+
+
+Request request,
+
+
+
+String departmentId,
+
+
+
+) {
+
+
+
+return request.copyWith(
+
+
+
+departmentId: departmentId,
+
+
+
+currentStatus: 'PENDING',
+
+
+
+);
+
+
+
+}
+
+
+
+// ============================================================
+
+
+
+// MESSAGE
+
+
+
+// ============================================================
+
+
+
+void _showMessage(
+
+
+
+String message, {
+
+
+
+bool isError = false,
+
+
+
+}) {
+
+
+
+ScaffoldMessenger.of(context).showSnackBar(
+
+
+
+SnackBar(
+
+
+
+content: Text(message),
+
+
+
+backgroundColor: isError ? Colors.red : null,
+
+
+
+),
+
+
+
+);
+
+
+
+}
+
+
+
+// ============================================================
+
+
+
+// BUILD
+
+
+
+// ============================================================
+
+
+
+@override
+
+
+
+Widget build(BuildContext context) {
+
+
+
+return Scaffold(
+
+
+
+appBar: AppBar(
+
+
+
+title: const Text('Chi tiết góp ý'),
+
+
+
+centerTitle: true,
+
+
+
+actions: [
+
+
+
+IconButton(
+
+
+
+onPressed: _loadDetails,
+
+
+
+icon: const Icon(Icons.refresh),
+
+
+
+tooltip: 'Làm mới',
+
+
+
+),
+
+
+
+],
+
+
+
+),
+
+
+
+body: _isLoading
+
+
+
+? const Center(
+
+
+
+child: CircularProgressIndicator(),
+
+
+
+)
+
+
+
+: RefreshIndicator(
+
+
+
+onRefresh: _loadDetails,
+
+
+
+child: ListView(
+
+
+
+padding: const EdgeInsets.all(16),
+
+
+
+children: [
+
+
+
+_buildBasicInformation(),
+
+
+
+const SizedBox(height: 16),
+
+
+
+_buildStatusSection(),
+
+
+
+const SizedBox(height: 16),
+
+
+
+_buildAttachmentsSection(),
+
+
+
+const SizedBox(height: 16),
+
+
+
+_buildHistorySection(),
+
+
+
+const SizedBox(height: 16),
+
+
+
+_buildConversationSection(),
+
+
+
+const SizedBox(height: 16),
+
+
+
+_buildForwardSection(),
+
+
+
+const SizedBox(height: 24),
+
+
+
+],
+
+
+
+),
+
+
+
+),
+
+
+
+);
+
+
+
+}
+
+
+
+// ============================================================
+
+
+
+// BASIC INFORMATION
+
+
+
+// ============================================================
+
+
+
+Widget _buildBasicInformation() {
+
+
+
+final request = _request;
+
+
+
+return Card(
+
+
+
+elevation: 2,
+
+
+
+child: Padding(
+
+
+
+padding: const EdgeInsets.all(16),
+
+
+
+child: Column(
+
+
+
+crossAxisAlignment: CrossAxisAlignment.start,
+
+
+
+children: [
+
+
+
+const Text(
+
+
+
+'Thông tin góp ý',
+
+
+
+style: TextStyle(
+
+
+
+fontSize: 20,
+
+
+
+fontWeight: FontWeight.bold,
+
+
+
+),
+
+
+
+),
+
+
+
+const SizedBox(height: 16),
+
+
+
+_buildInfoRow(
+
+
+
+icon: Icons.subject,
+
+
+
+title: 'Tiêu đề',
+
+
+
+value: request.subject ?? 'Không có',
+
+
+
+),
+
+
+
+const SizedBox(height: 12),
+
+
+
+_buildInfoRow(
+
+
+
+icon: Icons.description_outlined,
+
+
+
+title: 'Nội dung',
+
+
+
+value: request.description ?? 'Không có',
+
+
+
+),
+
+
+
+if (request.location != null &&
+
+
+
+request.location!.trim().isNotEmpty) ...[
+
+
+
+const SizedBox(height: 12),
+
+
+
+_buildInfoRow(
+
+
+
+icon: Icons.location_on_outlined,
+
+
+
+title: 'Địa điểm',
+
+
+
+value: request.location!,
+
+
+
+),
+
+
+
+],
+
+
+
+const SizedBox(height: 12),
+
+
+
+_buildInfoRow(
+
+
+
+icon: Icons.access_time,
+
+
+
+title: 'Thời gian gửi',
+
+
+
+value: _formatDate(request.timeCreate),
+
+
+
+),
+
+
+
+const SizedBox(height: 12),
+
+
+
+_buildInfoRow(
 
               icon: Icons.person_outline,
 
-              title: 'Mã sinh viên',
+              title: 'Người gửi',
 
-              value: request.userId ?? 'Không có',
+              value: request.user?.fullName ??
+
+                  request.userId ??
+
+                  'Không có',
+
+            ),
+
+
+
+            const SizedBox(height: 12),
+
+
+
+            _buildInfoRow(
+
+              icon: Icons.category_outlined,
+
+              title: 'Danh mục',
+
+              value: _categoryNames(request),
 
             ),
 
@@ -812,469 +1294,843 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
             Row(
 
-              crossAxisAlignment: CrossAxisAlignment.center,
 
-              children: [
 
-                const Icon(
+crossAxisAlignment: CrossAxisAlignment.center,
 
-                  Icons.flag_outlined,
 
-                  size: 22,
 
-                ),
+children: [
 
-                const SizedBox(width: 12),
 
-                const Text(
 
-                  'Trạng thái:',
+const Icon(
 
-                  style: TextStyle(
 
-                    fontWeight: FontWeight.w600,
 
-                  ),
+Icons.flag_outlined,
 
-                ),
 
-                const SizedBox(width: 8),
 
-                _buildStatusBadge(
+size: 22,
 
-                  request.currentStatus ?? 'PENDING',
 
-                ),
 
-              ],
+),
 
-            ),
 
-          ],
 
-        ),
+const SizedBox(width: 12),
 
-      ),
 
-    );
 
-  }
+const Text(
 
 
 
-  // ============================================================
+'Trạng thái:',
 
-  // INFO ROW
 
-  // ============================================================
 
+style: TextStyle(
 
 
-  Widget _buildInfoRow({
 
-    required IconData icon,
+fontWeight: FontWeight.w600,
 
-    required String title,
 
-    required String value,
 
-  }) {
+),
 
-    return Row(
 
-      crossAxisAlignment: CrossAxisAlignment.start,
 
-      children: [
+),
 
-        Icon(
 
-          icon,
 
-          size: 22,
+const SizedBox(width: 8),
 
-          color: Colors.grey.shade700,
 
-        ),
 
-        const SizedBox(width: 12),
+_buildStatusBadge(
 
-        Expanded(
 
-          child: Column(
 
-            crossAxisAlignment: CrossAxisAlignment.start,
+request.currentStatus ?? 'PENDING',
 
-            children: [
 
-              Text(
 
-                title,
+),
 
-                style: TextStyle(
 
-                  fontSize: 13,
 
-                  color: Colors.grey.shade600,
+],
 
-                  fontWeight: FontWeight.w500,
 
-                ),
 
-              ),
+),
 
-              const SizedBox(height: 3),
 
-              Text(
 
-                value,
+],
 
-                style: const TextStyle(
 
-                  fontSize: 15,
 
-                ),
+),
 
-              ),
 
-            ],
 
-          ),
+),
 
-        ),
 
-      ],
 
-    );
+);
 
-  }
 
 
+}
 
-  // ============================================================
 
-  // STATUS SECTION
 
-  // ============================================================
+// ============================================================
 
 
 
-  Widget _buildStatusSection() {
+// INFO ROW
 
-    final currentStatus = _request.currentStatus ?? 'PENDING';
 
 
+// ============================================================
 
-    final statuses = _availableStatuses(currentStatus);
 
 
+Widget _buildInfoRow({
 
-    return Card(
 
-      elevation: 2,
 
-      child: Padding(
+required IconData icon,
 
-        padding: const EdgeInsets.all(16),
 
-        child: Column(
 
-          crossAxisAlignment: CrossAxisAlignment.start,
+required String title,
 
-          children: [
 
-            const Text(
 
-              'Cập nhật trạng thái',
+required String value,
 
-              style: TextStyle(
 
-                fontSize: 18,
 
-                fontWeight: FontWeight.bold,
+}) {
 
-              ),
 
-            ),
 
+return Row(
 
 
-            const SizedBox(height: 8),
 
+crossAxisAlignment: CrossAxisAlignment.start,
 
 
-            Text(
 
-              'Trạng thái hiện tại: ${_statusLabel(currentStatus)}',
+children: [
 
-              style: TextStyle(
 
-                color: Colors.grey.shade700,
 
-              ),
+Icon(
 
-            ),
 
 
+icon,
 
-            const SizedBox(height: 12),
 
 
+size: 22,
 
-            DropdownButtonFormField<String>(
 
-              value: _selectedStatus,
 
-              decoration: const InputDecoration(
+color: Colors.grey.shade700,
 
-                labelText: 'Trạng thái mới',
 
-                border: OutlineInputBorder(),
 
-              ),
+),
 
-              items: statuses.map((status) {
 
-                return DropdownMenuItem<String>(
 
-                  value: status,
+const SizedBox(width: 12),
 
-                  child: Text(
 
-                    _statusLabel(status),
 
-                  ),
+Expanded(
 
-                );
 
-              }).toList(),
 
-              onChanged: _isUpdatingStatus
+child: Column(
 
-                  ? null
 
-                  : (value) {
 
-                      setState(() {
+crossAxisAlignment: CrossAxisAlignment.start,
 
-                        _selectedStatus = value;
 
-                      });
 
-                    },
+children: [
 
-            ),
 
 
+Text(
 
-            const SizedBox(height: 12),
 
 
+title,
 
-            SizedBox(
 
-              width: double.infinity,
 
-              child: ElevatedButton.icon(
+style: TextStyle(
 
-                onPressed:
 
-                    _isUpdatingStatus ? null : _updateStatus,
 
-                icon: _isUpdatingStatus
+fontSize: 13,
 
-                    ? const SizedBox(
 
-                        width: 18,
 
-                        height: 18,
+color: Colors.grey.shade600,
 
-                        child: CircularProgressIndicator(
 
-                          strokeWidth: 2,
 
-                        ),
+fontWeight: FontWeight.w500,
 
-                      )
 
-                    : const Icon(Icons.save),
 
-                label: Text(
+),
 
-                  _isUpdatingStatus
 
-                      ? 'Đang cập nhật...'
 
-                      : 'Cập nhật trạng thái',
+),
 
-                ),
 
-              ),
 
-            ),
+const SizedBox(height: 3),
 
-          ],
 
-        ),
 
-      ),
+Text(
 
-    );
 
-  }
 
+value,
 
 
-  // ============================================================
 
-  // AVAILABLE STATUS
+style: const TextStyle(
 
-  // ============================================================
 
 
+fontSize: 15,
 
-  List<String> _availableStatuses(String currentStatus) {
 
-    switch (currentStatus) {
 
-      case 'PENDING':
+),
 
-        return [
 
-          'APPROVED',
 
-          'RESOLVED',
+),
 
-          'REJECTED',
 
-        ];
 
+],
 
 
-      case 'APPROVED':
 
-        return [
+),
 
-          'RESOLVED',
 
-          'REJECTED',
 
-          'FORWARDING',
+),
 
-        ];
 
 
+],
 
-      case 'RESOLVED':
 
-      case 'REJECTED':
 
-        return [];
+);
 
 
 
-      default:
+}
 
-        return [];
 
-    }
 
-  }
+// ============================================================
 
 
 
-  // ============================================================
+// STATUS SECTION
 
-  // ATTACHMENTS
 
-  // ============================================================
 
+// ============================================================
 
 
-  Widget _buildAttachmentsSection() {
 
-    final attachments = _details.attachments;
+Widget _buildStatusSection() {
 
 
 
-    return Card(
+final currentStatus = _request.currentStatus ?? 'PENDING';
 
-      elevation: 2,
 
-      child: Padding(
 
-        padding: const EdgeInsets.all(16),
+final statuses = _availableStatuses(currentStatus);
 
-        child: Column(
 
-          crossAxisAlignment: CrossAxisAlignment.start,
 
-          children: [
+return Card(
 
-            const Text(
 
-              'File đính kèm',
 
-              style: TextStyle(
+elevation: 2,
 
-                fontSize: 18,
 
-                fontWeight: FontWeight.bold,
 
-              ),
+child: Padding(
 
-            ),
 
 
+padding: const EdgeInsets.all(16),
 
-            const SizedBox(height: 12),
 
 
+child: Column(
 
-            if (attachments.isEmpty)
 
-              Text(
 
-                'Không có file đính kèm.',
+crossAxisAlignment: CrossAxisAlignment.start,
 
-                style: TextStyle(
 
-                  color: Colors.grey.shade600,
 
-                ),
+children: [
 
-              )
 
-            else
 
-              ...attachments.map(
+const Text(
 
-                _buildAttachmentItem,
 
-              ),
 
-          ],
+'Cập nhật trạng thái',
 
-        ),
 
-      ),
 
-    );
+style: TextStyle(
 
-  }
 
 
+fontSize: 18,
 
-  Widget _buildAttachmentItem(
 
-    FileAttachment attachment,
 
-  ) {
+fontWeight: FontWeight.bold,
 
-    return Card(
 
-      margin: const EdgeInsets.only(bottom: 8),
 
-      child: ListTile(
+),
+
+
+
+),
+
+
+
+const SizedBox(height: 8),
+
+
+
+Text(
+
+
+
+'Trạng thái hiện tại: ${_statusLabel(currentStatus)}',
+
+
+
+style: TextStyle(
+
+
+
+color: Colors.grey.shade700,
+
+
+
+),
+
+
+
+),
+
+
+
+const SizedBox(height: 12),
+
+
+
+DropdownButtonFormField<String>(
+
+
+
+value: _selectedStatus,
+
+
+
+decoration: const InputDecoration(
+
+
+
+labelText: 'Trạng thái mới',
+
+
+
+border: OutlineInputBorder(),
+
+
+
+),
+
+
+
+items: statuses.map((status) {
+
+
+
+return DropdownMenuItem<String>(
+
+
+
+value: status,
+
+
+
+child: Text(
+
+
+
+_statusLabel(status),
+
+
+
+),
+
+
+
+);
+
+
+
+}).toList(),
+
+
+
+onChanged: _isUpdatingStatus
+
+
+
+? null
+
+
+
+: (value) {
+
+
+
+setState(() {
+
+
+
+_selectedStatus = value;
+
+
+
+});
+
+
+
+},
+
+
+
+),
+
+
+
+const SizedBox(height: 12),
+
+
+
+SizedBox(
+
+
+
+width: double.infinity,
+
+
+
+child: ElevatedButton.icon(
+
+
+
+onPressed:
+
+
+
+_isUpdatingStatus ? null : _updateStatus,
+
+
+
+icon: _isUpdatingStatus
+
+
+
+? const SizedBox(
+
+
+
+width: 18,
+
+
+
+height: 18,
+
+
+
+child: CircularProgressIndicator(
+
+
+
+strokeWidth: 2,
+
+
+
+),
+
+
+
+)
+
+
+
+: const Icon(Icons.save),
+
+
+
+label: Text(
+
+
+
+_isUpdatingStatus
+
+
+
+? 'Đang cập nhật...'
+
+
+
+: 'Cập nhật trạng thái',
+
+
+
+),
+
+
+
+),
+
+
+
+),
+
+
+
+],
+
+
+
+),
+
+
+
+),
+
+
+
+);
+
+
+
+}
+
+
+
+// ============================================================
+
+
+
+// AVAILABLE STATUS
+
+
+
+// ============================================================
+
+
+
+List<String> _availableStatuses(String currentStatus) {
+
+
+
+switch (currentStatus) {
+
+
+
+case 'PENDING':
+
+
+
+return [
+
+
+
+'APPROVED',
+
+
+
+'RESOLVED',
+
+
+
+'REJECTED',
+
+
+
+];
+
+
+
+case 'APPROVED':
+
+
+
+return [
+
+
+
+'RESOLVED',
+
+
+
+'REJECTED',
+
+
+
+'FORWARDING',
+
+
+
+];
+
+
+
+case 'RESOLVED':
+
+
+
+case 'REJECTED':
+
+
+
+return [];
+
+
+
+default:
+
+
+
+return [];
+
+
+
+}
+
+
+
+}
+
+
+
+// ============================================================
+
+
+
+// ATTACHMENTS
+
+
+
+// ============================================================
+
+
+
+Widget _buildAttachmentsSection() {
+
+
+
+final attachments = _details.attachments;
+
+
+
+return Card(
+
+
+
+elevation: 2,
+
+
+
+child: Padding(
+
+
+
+padding: const EdgeInsets.all(16),
+
+
+
+child: Column(
+
+
+
+crossAxisAlignment: CrossAxisAlignment.start,
+
+
+
+children: [
+
+
+
+const Text(
+
+
+
+'File đính kèm',
+
+
+
+style: TextStyle(
+
+
+
+fontSize: 18,
+
+
+
+fontWeight: FontWeight.bold,
+
+
+
+),
+
+
+
+),
+
+
+
+const SizedBox(height: 12),
+
+
+
+if (attachments.isEmpty)
+
+
+
+Text(
+
+
+
+'Không có file đính kèm.',
+
+
+
+style: TextStyle(
+
+
+
+color: Colors.grey.shade600,
+
+
+
+),
+
+
+
+)
+
+
+
+else
+
+
+
+...attachments.map(
+
+
+
+_buildAttachmentItem,
+
+
+
+),
+
+
+
+],
+
+
+
+),
+
+
+
+),
+
+
+
+);
+
+
+
+}
+
+
+
+Widget _buildAttachmentItem(
+
+
+
+FileAttachment attachment,
+
+
+
+) {
+
+
+
+return Card(
+
+
+
+margin: const EdgeInsets.only(bottom: 8),
+
+
+
+child: ListTile(
+
+        onTap: () => _openAttachment(attachment),
 
         leading: const Icon(
 
@@ -1284,747 +2140,1461 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
         title: Text(
 
-          attachment.filename ?? 'File',
 
-          maxLines: 2,
 
-          overflow: TextOverflow.ellipsis,
-
-        ),
-
-        subtitle: Text(
-
-          _formatFileSize(attachment.filesize),
-
-        ),
-
-        trailing: IconButton(
-
-          icon: const Icon(
-
-            Icons.open_in_new,
-
-          ),
-
-          onPressed: () {
-
-            final url = attachment.fileUrl;
+attachment.filename ?? 'File',
 
 
 
-            if (url == null || url.isEmpty) {
-
-              _showMessage(
-
-                'Không tìm thấy đường dẫn file.',
-
-                isError: true,
-
-              );
-
-              return;
-
-            }
+maxLines: 2,
 
 
 
-            _showMessage(
-
-              'File: $url',
-
-            );
-
-          },
-
-        ),
-
-      ),
-
-    );
-
-  }
+overflow: TextOverflow.ellipsis,
 
 
 
-  // ============================================================
-
-  // STATUS HISTORY
-
-  // ============================================================
+),
 
 
 
-  Widget _buildHistorySection() {
-
-    final histories = _details.histories;
+subtitle: Text(
 
 
 
-    return Card(
+_formatFileSize(attachment.filesize),
 
-      elevation: 2,
 
-      child: Padding(
 
-        padding: const EdgeInsets.all(16),
+),
 
-        child: Column(
 
-          crossAxisAlignment: CrossAxisAlignment.start,
 
-          children: [
+trailing: IconButton(
 
-            const Text(
+            icon: const Icon(
 
-              'Lịch sử xử lý',
-
-              style: TextStyle(
-
-                fontSize: 18,
-
-                fontWeight: FontWeight.bold,
-
-              ),
+              Icons.open_in_new,
 
             ),
 
+            tooltip: 'Mở file',
 
-
-            const SizedBox(height: 16),
-
-
-
-            if (histories.isEmpty)
-
-              Text(
-
-                'Chưa có lịch sử xử lý.',
-
-                style: TextStyle(
-
-                  color: Colors.grey.shade600,
-
-                ),
-
-              )
-
-            else
-
-              ...histories.asMap().entries.map(
-
-                (entry) {
-
-                  final index = entry.key;
-
-                  final history = entry.value;
-
-
-
-                  return _buildHistoryItem(
-
-                    history,
-
-                    isLast: index == histories.length - 1,
-
-                  );
-
-                },
-
-              ),
-
-          ],
-
-        ),
-
-      ),
-
-    );
-
-  }
-
-
-
-  Widget _buildHistoryItem(
-
-    RequestStatusHistory history, {
-
-    required bool isLast,
-
-  }) {
-
-    final status = history.status ?? 'UNKNOWN';
-
-
-
-    return Row(
-
-      crossAxisAlignment: CrossAxisAlignment.start,
-
-      children: [
-
-        Column(
-
-          children: [
-
-            Container(
-
-              width: 14,
-
-              height: 14,
-
-              decoration: BoxDecoration(
-
-                shape: BoxShape.circle,
-
-                color: _statusColor(status),
-
-              ),
-
-            ),
-
-
-
-            if (!isLast)
-
-              Container(
-
-                width: 2,
-
-                height: 50,
-
-                color: Colors.grey.shade300,
-
-              ),
-
-          ],
-
-        ),
-
-
-
-        const SizedBox(width: 12),
-
-
-
-        Expanded(
-
-          child: Padding(
-
-            padding: const EdgeInsets.only(
-
-              bottom: 16,
-
-            ),
-
-            child: Column(
-
-              crossAxisAlignment: CrossAxisAlignment.start,
-
-              children: [
-
-                Text(
-
-                  _statusLabel(status),
-
-                  style: const TextStyle(
-
-                    fontWeight: FontWeight.bold,
-
-                  ),
-
-                ),
-
-
-
-                const SizedBox(height: 4),
-
-
-
-                Text(
-
-                  _formatDate(history.createAt),
-
-                  style: TextStyle(
-
-                    fontSize: 13,
-
-                    color: Colors.grey.shade600,
-
-                  ),
-
-                ),
-
-              ],
-
-            ),
-
-          ),
-
-        ),
-
-      ],
-
-    );
-
-  }
-
-
-
-  // ============================================================
-
-  // CONVERSATION
-
-  // ============================================================
-
-
-
-  Widget _buildConversationSection() {
-
-    final conversations = _details.conversations;
-
-
-
-    return Card(
-
-      elevation: 2,
-
-      child: Padding(
-
-        padding: const EdgeInsets.all(16),
-
-        child: Column(
-
-          crossAxisAlignment: CrossAxisAlignment.start,
-
-          children: [
-
-            const Text(
-
-              'Trao đổi',
-
-              style: TextStyle(
-
-                fontSize: 18,
-
-                fontWeight: FontWeight.bold,
-
-              ),
-
-            ),
-
-
-
-            const SizedBox(height: 12),
-
-
-
-            if (conversations.isEmpty)
-
-              Text(
-
-                'Chưa có cuộc trao đổi nào.',
-
-                style: TextStyle(
-
-                  color: Colors.grey.shade600,
-
-                ),
-
-              )
-
-            else
-
-              ...conversations.map(
-
-                _buildConversationItem,
-
-              ),
-
-          ],
-
-        ),
-
-      ),
-
-    );
-
-  }
-
-
-
-  Widget _buildConversationItem(
-
-    ClarificationConversation conversation,
-
-  ) {
-
-    final messages = conversation.messages ?? [];
-
-
-
-    return ExpansionTile(
-
-      tilePadding: EdgeInsets.zero,
-
-      title: Text(
-
-        conversation.subject ?? 'Trao đổi',
-
-        style: const TextStyle(
-
-          fontWeight: FontWeight.w600,
-
-        ),
-
-      ),
-
-      subtitle: Text(
-
-        conversation.isOpen == true
-
-            ? 'Đang mở'
-
-            : 'Đã đóng',
-
-      ),
-
-      children: [
-
-        if (messages.isEmpty)
-
-          const Padding(
-
-            padding: EdgeInsets.all(12),
-
-            child: Text(
-
-              'Chưa có tin nhắn.',
-
-            ),
-
-          )
-
-        else
-
-          ...messages.map(
-
-            _buildMessageItem,
-
-          ),
-
-      ],
-
-    );
-
-  }
-
-
-
-  Widget _buildMessageItem(
-
-    Message message,
-
-  ) {
-
-    return Container(
-
-      width: double.infinity,
-
-      margin: const EdgeInsets.only(
-
-        bottom: 8,
-
-      ),
-
-      padding: const EdgeInsets.all(12),
-
-      decoration: BoxDecoration(
-
-        color: Colors.grey.shade100,
-
-        borderRadius: BorderRadius.circular(8),
-
-      ),
-
-      child: Column(
-
-        crossAxisAlignment: CrossAxisAlignment.start,
-
-        children: [
-
-          Text(
-
-            message.content ?? '',
-
-            style: const TextStyle(
-
-              fontSize: 14,
-
-            ),
+            onPressed: () => _openAttachment(attachment),
 
           ),
 
 
 
-          const SizedBox(height: 6),
+),
 
 
 
-          Text(
-
-            _formatDate(message.createAt),
-
-            style: TextStyle(
-
-              fontSize: 12,
-
-              color: Colors.grey.shade600,
-
-            ),
-
-          ),
-
-        ],
-
-      ),
-
-    );
-
-  }
+);
 
 
 
-  // ============================================================
-
-  // FORWARD SECTION
-
-  // ============================================================
+}
 
 
 
-  Widget _buildForwardSection() {
+// ============================================================
 
-    final availableDepartments = widget.departments
 
-        .where(
 
-          (department) =>
+// STATUS HISTORY
 
-              department.id != null &&
 
-              department.id != _request.departmentId,
 
-        )
+// ============================================================
+
+
+
+Widget _buildHistorySection() {
+
+
+
+final histories = List<RequestStatusHistory>.from(
+
+      _details.histories,
+
+    )..sort((a, b) {
+
+        final aTime = a.createAt;
+
+        final bTime = b.createAt;
+
+
+
+        if (aTime == null && bTime == null) return 0;
+
+        if (aTime == null) return 1;
+
+        if (bTime == null) return -1;
+
+
+
+        return aTime.compareTo(bTime);
+
+      });
+
+
+
+return Card(
+
+
+
+elevation: 2,
+
+
+
+child: Padding(
+
+
+
+padding: const EdgeInsets.all(16),
+
+
+
+child: Column(
+
+
+
+crossAxisAlignment: CrossAxisAlignment.start,
+
+
+
+children: [
+
+
+
+const Text(
+
+
+
+'Lịch sử xử lý',
+
+
+
+style: TextStyle(
+
+
+
+fontSize: 18,
+
+
+
+fontWeight: FontWeight.bold,
+
+
+
+),
+
+
+
+),
+
+
+
+const SizedBox(height: 16),
+
+
+
+if (histories.isEmpty)
+
+
+
+Text(
+
+
+
+'Chưa có lịch sử xử lý.',
+
+
+
+style: TextStyle(
+
+
+
+color: Colors.grey.shade600,
+
+
+
+),
+
+
+
+)
+
+
+
+else
+
+
+
+...histories.asMap().entries.map(
+
+
+
+(entry) {
+
+
+
+final index = entry.key;
+
+
+
+final history = entry.value;
+
+
+
+return _buildHistoryItem(
+
+
+
+history,
+
+
+
+isLast: index == histories.length - 1,
+
+
+
+);
+
+
+
+},
+
+
+
+),
+
+
+
+],
+
+
+
+),
+
+
+
+),
+
+
+
+);
+
+
+
+}
+
+
+
+Widget _buildHistoryItem(
+
+
+
+RequestStatusHistory history, {
+
+
+
+required bool isLast,
+
+
+
+}) {
+
+
+
+final status = history.status ?? 'UNKNOWN';
+
+
+
+return Row(
+
+
+
+crossAxisAlignment: CrossAxisAlignment.start,
+
+
+
+children: [
+
+
+
+Column(
+
+
+
+children: [
+
+
+
+Container(
+
+
+
+width: 14,
+
+
+
+height: 14,
+
+
+
+decoration: BoxDecoration(
+
+
+
+shape: BoxShape.circle,
+
+
+
+color: _statusColor(status),
+
+
+
+),
+
+
+
+),
+
+
+
+if (!isLast)
+
+
+
+Container(
+
+
+
+width: 2,
+
+
+
+height: 50,
+
+
+
+color: Colors.grey.shade300,
+
+
+
+),
+
+
+
+],
+
+
+
+),
+
+
+
+const SizedBox(width: 12),
+
+
+
+Expanded(
+
+
+
+child: Padding(
+
+
+
+padding: const EdgeInsets.only(
+
+
+
+bottom: 16,
+
+
+
+),
+
+
+
+child: Column(
+
+
+
+crossAxisAlignment: CrossAxisAlignment.start,
+
+
+
+children: [
+
+
+
+Text(
+
+
+
+_statusLabel(status),
+
+
+
+style: const TextStyle(
+
+
+
+fontWeight: FontWeight.bold,
+
+
+
+),
+
+
+
+),
+
+
+
+const SizedBox(height: 4),
+
+
+
+Text(
+
+
+
+_formatDate(history.createAt),
+
+
+
+style: TextStyle(
+
+
+
+fontSize: 13,
+
+
+
+color: Colors.grey.shade600,
+
+
+
+),
+
+
+
+),
+
+
+
+],
+
+
+
+),
+
+
+
+),
+
+
+
+),
+
+
+
+],
+
+
+
+);
+
+
+
+}
+
+
+
+// ============================================================
+
+
+
+// CONVERSATION
+
+
+
+// ============================================================
+
+
+
+Widget _buildConversationSection() {
+
+
+
+final conversations = _details.conversations;
+
+
+
+return Card(
+
+
+
+elevation: 2,
+
+
+
+child: Padding(
+
+
+
+padding: const EdgeInsets.all(16),
+
+
+
+child: Column(
+
+
+
+crossAxisAlignment: CrossAxisAlignment.start,
+
+
+
+children: [
+
+
+
+const Text(
+
+
+
+'Trao đổi',
+
+
+
+style: TextStyle(
+
+
+
+fontSize: 18,
+
+
+
+fontWeight: FontWeight.bold,
+
+
+
+),
+
+
+
+),
+
+
+
+const SizedBox(height: 12),
+
+
+
+if (conversations.isEmpty)
+
+
+
+Text(
+
+
+
+'Chưa có cuộc trao đổi nào.',
+
+
+
+style: TextStyle(
+
+
+
+color: Colors.grey.shade600,
+
+
+
+),
+
+
+
+)
+
+
+
+else
+
+
+
+...conversations.map(
+
+
+
+_buildConversationItem,
+
+
+
+),
+
+
+
+],
+
+
+
+),
+
+
+
+),
+
+
+
+);
+
+
+
+}
+
+
+
+Widget _buildConversationItem(
+
+
+
+ClarificationConversation conversation,
+
+
+
+) {
+
+
+
+final messages = conversation.messages ?? [];
+
+
+
+return ExpansionTile(
+
+
+
+tilePadding: EdgeInsets.zero,
+
+
+
+title: Text(
+
+
+
+conversation.subject ?? 'Trao đổi',
+
+
+
+style: const TextStyle(
+
+
+
+fontWeight: FontWeight.w600,
+
+
+
+),
+
+
+
+),
+
+
+
+subtitle: Text(
+
+
+
+conversation.isOpen == true
+
+
+
+? 'Đang mở'
+
+
+
+: 'Đã đóng',
+
+
+
+),
+
+
+
+children: [
+
+
+
+if (messages.isEmpty)
+
+
+
+const Padding(
+
+
+
+padding: EdgeInsets.all(12),
+
+
+
+child: Text(
+
+
+
+'Chưa có tin nhắn.',
+
+
+
+),
+
+
+
+)
+
+
+
+else
+
+
+
+...messages.map(
+
+
+
+_buildMessageItem,
+
+
+
+),
+
+
+
+],
+
+
+
+);
+
+
+
+}
+
+
+
+Widget _buildMessageItem(
+
+
+
+Message message,
+
+
+
+) {
+
+
+
+return Container(
+
+
+
+width: double.infinity,
+
+
+
+margin: const EdgeInsets.only(
+
+
+
+bottom: 8,
+
+
+
+),
+
+
+
+padding: const EdgeInsets.all(12),
+
+
+
+decoration: BoxDecoration(
+
+
+
+color: Colors.grey.shade100,
+
+
+
+borderRadius: BorderRadius.circular(8),
+
+
+
+),
+
+
+
+child: Column(
+
+
+
+crossAxisAlignment: CrossAxisAlignment.start,
+
+
+
+children: [
+
+
+
+Text(
+
+
+
+message.content ?? '',
+
+
+
+style: const TextStyle(
+
+
+
+fontSize: 14,
+
+
+
+),
+
+
+
+),
+
+
+
+const SizedBox(height: 6),
+
+
+
+Text(
+
+
+
+_formatDate(message.createAt),
+
+
+
+style: TextStyle(
+
+
+
+fontSize: 12,
+
+
+
+color: Colors.grey.shade600,
+
+
+
+),
+
+
+
+),
+
+
+
+],
+
+
+
+),
+
+
+
+);
+
+
+
+}
+
+
+
+// ============================================================
+
+
+
+// FORWARD SECTION
+
+
+
+// ============================================================
+
+
+
+Widget _buildForwardSection() {
+
+
+
+final availableDepartments = widget.departments
+
+
+
+.where(
+
+
+
+(department) =>
+
+
+
+department.id != null &&
+
+
+
+department.id != _request.departmentId,
+
+
+
+)
+
+
+
+.toList();
+
+
+
+return Card(
+
+
+
+elevation: 2,
+
+
+
+child: Padding(
+
+
+
+padding: const EdgeInsets.all(16),
+
+
+
+child: Column(
+
+
+
+crossAxisAlignment: CrossAxisAlignment.start,
+
+
+
+children: [
+
+
+
+const Text(
+
+
+
+'Chuyển phòng ban',
+
+
+
+style: TextStyle(
+
+
+
+fontSize: 18,
+
+
+
+fontWeight: FontWeight.bold,
+
+
+
+),
+
+
+
+),
+
+
+
+const SizedBox(height: 8),
+
+
+
+Text(
+
+
+
+'Phòng ban hiện tại: '
+
+
+
+'${_departmentName(_request.departmentId)}',
+
+
+
+style: TextStyle(
+
+
+
+color: Colors.grey.shade700,
+
+
+
+),
+
+
+
+),
+
+
+
+const SizedBox(height: 12),
+
+
+
+if (availableDepartments.isEmpty)
+
+
+
+Text(
+
+
+
+'Không có phòng ban khác để chuyển.',
+
+
+
+style: TextStyle(
+
+
+
+color: Colors.grey.shade600,
+
+
+
+),
+
+
+
+)
+
+
+
+else ...[
+
+
+
+DropdownButtonFormField<String>(
+
+
+
+value: _selectedDepartmentId,
+
+
+
+decoration: const InputDecoration(
+
+
+
+labelText: 'Phòng ban nhận',
+
+
+
+border: OutlineInputBorder(),
+
+
+
+),
+
+
+
+items: availableDepartments.map(
+
+
+
+(department) {
+
+
+
+return DropdownMenuItem<String>(
+
+
+
+value: department.id!,
+
+
+
+child: Text(
+
+
+
+department.name ?? department.id!,
+
+
+
+),
+
+
+
+);
+
+
+
+},
+
+
+
+).toList(),
+
+
+
+onChanged: _isForwarding
+
+
+
+? null
+
+
+
+: (value) {
+
+
+
+setState(() {
+
+
+
+_selectedDepartmentId = value;
+
+
+
+});
+
+
+
+},
+
+
+
+),
+
+
+
+const SizedBox(height: 12),
+
+
+
+TextField(
+
+
+
+controller: _forwardNoteController,
+
+
+
+maxLines: 3,
+
+
+
+enabled: !_isForwarding,
+
+
+
+decoration: const InputDecoration(
+
+
+
+labelText: 'Ghi chú chuyển',
+
+
+
+hintText: 'Nhập ghi chú nếu cần...',
+
+
+
+border: OutlineInputBorder(),
+
+
+
+),
+
+
+
+),
+
+
+
+const SizedBox(height: 12),
+
+
+
+SizedBox(
+
+
+
+width: double.infinity,
+
+
+
+child: ElevatedButton.icon(
+
+
+
+onPressed:
+
+
+
+_isForwarding ? null : _forwardRequest,
+
+
+
+icon: _isForwarding
+
+
+
+? const SizedBox(
+
+
+
+width: 18,
+
+
+
+height: 18,
+
+
+
+child: CircularProgressIndicator(
+
+
+
+strokeWidth: 2,
+
+
+
+),
+
+
+
+)
+
+
+
+: const Icon(
+
+
+
+Icons.forward,
+
+
+
+),
+
+
+
+label: Text(
+
+
+
+_isForwarding
+
+
+
+? 'Đang chuyển...'
+
+
+
+: 'Chuyển phòng ban',
+
+
+
+),
+
+
+
+),
+
+
+
+),
+
+
+
+],
+
+
+
+],
+
+
+
+),
+
+
+
+),
+
+
+
+);
+
+
+
+}
+
+
+
+// ============================================================
+
+
+
+// DEPARTMENT NAME
+
+
+
+// ============================================================
+
+
+
+String _categoryNames(Request request) {
+
+    final categories = request.categories;
+
+
+
+    if (categories.isEmpty) {
+
+      return 'Không có';
+
+    }
+
+
+
+    final names = categories
+
+        .map((category) => category.subject.trim())
+
+        .whereType<String>()
+
+        .where((name) => name.isNotEmpty)
 
         .toList();
 
 
 
-    return Card(
+    if (names.isEmpty) {
 
-      elevation: 2,
+      return 'Không có';
 
-      child: Padding(
+    }
 
-        padding: const EdgeInsets.all(16),
 
-        child: Column(
 
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return names.join(', ');
 
-          children: [
+  }
 
-            const Text(
 
-              'Chuyển phòng ban',
 
-              style: TextStyle(
+  // ============================================================
 
-                fontSize: 18,
+  // OPEN ATTACHMENT
 
-                fontWeight: FontWeight.bold,
+  // ============================================================
 
-              ),
 
-            ),
 
+  Future<void> _openAttachment(FileAttachment attachment) async {
 
+    final rawUrl = attachment.fileUrl?.trim();
 
-            const SizedBox(height: 8),
 
 
+    if (rawUrl == null || rawUrl.isEmpty) {
 
-            Text(
+      _showMessage(
 
-              'Phòng ban hiện tại: '
+        'Không tìm thấy đường dẫn file.',
 
-              '${_departmentName(_request.departmentId)}',
+        isError: true,
 
-              style: TextStyle(
+      );
 
-                color: Colors.grey.shade700,
+      return;
 
-              ),
+    }
 
-            ),
 
 
+    final uri = Uri.tryParse(rawUrl);
 
-            const SizedBox(height: 12),
 
 
+    if (uri == null ||
 
-            if (availableDepartments.isEmpty)
+        !(uri.scheme == 'http' || uri.scheme == 'https')) {
 
-              Text(
+      _showMessage(
 
-                'Không có phòng ban khác để chuyển.',
+        'Đường dẫn file không hợp lệ.',
 
-                style: TextStyle(
+        isError: true,
 
-                  color: Colors.grey.shade600,
+      );
 
-                ),
+      return;
 
-              )
+    }
 
-            else ...[
 
-              DropdownButtonFormField<String>(
 
-                value: _selectedDepartmentId,
+    try {
 
-                decoration: const InputDecoration(
+      final opened = await launchUrl(
 
-                  labelText: 'Phòng ban nhận',
+        uri,
 
-                  border: OutlineInputBorder(),
+        mode: LaunchMode.externalApplication,
 
-                ),
+      );
 
-                items: availableDepartments.map(
 
-                  (department) {
 
-                    return DropdownMenuItem<String>(
+      if (!opened && mounted) {
 
-                      value: department.id!,
+        _showMessage(
 
-                      child: Text(
+          'Không thể mở file.',
 
-                        department.name ?? department.id!,
+          isError: true,
 
-                      ),
+        );
 
-                    );
+      }
 
-                  },
+    } catch (e) {
 
-                ).toList(),
+      if (!mounted) return;
 
-                onChanged: _isForwarding
 
-                    ? null
 
-                    : (value) {
+      _showMessage(
 
-                        setState(() {
+        'Không thể mở file: $e',
 
-                          _selectedDepartmentId = value;
+        isError: true,
 
-                        });
+      );
 
-                      },
-
-              ),
-
-
-
-              const SizedBox(height: 12),
-
-
-
-              TextField(
-
-                controller: _forwardNoteController,
-
-                maxLines: 3,
-
-                enabled: !_isForwarding,
-
-                decoration: const InputDecoration(
-
-                  labelText: 'Ghi chú chuyển',
-
-                  hintText: 'Nhập ghi chú nếu cần...',
-
-                  border: OutlineInputBorder(),
-
-                ),
-
-              ),
-
-
-
-              const SizedBox(height: 12),
-
-
-
-              SizedBox(
-
-                width: double.infinity,
-
-                child: ElevatedButton.icon(
-
-                  onPressed:
-
-                      _isForwarding ? null : _forwardRequest,
-
-                  icon: _isForwarding
-
-                      ? const SizedBox(
-
-                          width: 18,
-
-                          height: 18,
-
-                          child: CircularProgressIndicator(
-
-                            strokeWidth: 2,
-
-                          ),
-
-                        )
-
-                      : const Icon(
-
-                          Icons.forward,
-
-                        ),
-
-                  label: Text(
-
-                    _isForwarding
-
-                        ? 'Đang chuyển...'
-
-                        : 'Chuyển phòng ban',
-
-                  ),
-
-                ),
-
-              ),
-
-            ],
-
-          ],
-
-        ),
-
-      ),
-
-    );
+    }
 
   }
 
@@ -2040,272 +3610,426 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
   String _departmentName(String? departmentId) {
 
-    if (departmentId == null || departmentId.isEmpty) {
 
-      return 'Không xác định';
 
-    }
+if (departmentId == null || departmentId.isEmpty) {
 
 
 
-    for (final department in widget.departments) {
+return 'Không xác định';
 
-      if (department.id == departmentId) {
 
-        return department.name ?? departmentId;
 
-      }
+}
 
-    }
 
 
+for (final department in widget.departments) {
 
-    return departmentId;
 
-  }
 
+if (department.id == departmentId) {
 
 
-  // ============================================================
 
-  // STATUS BADGE
+return department.name ?? departmentId;
 
-  // ============================================================
 
 
+}
 
-  Widget _buildStatusBadge(String status) {
 
-    return Container(
 
-      padding: const EdgeInsets.symmetric(
+}
 
-        horizontal: 10,
 
-        vertical: 6,
 
-      ),
+return departmentId;
 
-      decoration: BoxDecoration(
 
-        color: _statusColor(status).withValues(
 
-          alpha: 0.12,
+}
 
-        ),
 
-        borderRadius: BorderRadius.circular(20),
 
-      ),
+// ============================================================
 
-      child: Text(
 
-        _statusLabel(status),
 
-        style: TextStyle(
+// STATUS BADGE
 
-          color: _statusColor(status),
 
-          fontSize: 12,
 
-          fontWeight: FontWeight.bold,
+// ============================================================
 
-        ),
 
-      ),
 
-    );
+Widget _buildStatusBadge(String status) {
 
-  }
 
 
+return Container(
 
-  // ============================================================
 
-  // STATUS LABEL
 
-  // ============================================================
+padding: const EdgeInsets.symmetric(
 
 
 
-  String _statusLabel(String status) {
+horizontal: 10,
 
-    switch (status) {
 
-      case 'PENDING':
 
-        return 'Chờ xử lý';
+vertical: 6,
 
 
 
-      case 'APPROVED':
+),
 
-        return 'Đã tiếp nhận';
 
 
+decoration: BoxDecoration(
 
-      case 'RESOLVED':
 
-        return 'Đã giải quyết';
 
+color: _statusColor(status).withValues(
 
 
-      case 'REJECTED':
 
-        return 'Từ chối';
+alpha: 0.12,
 
 
 
-      case 'FORWARDING':
+),
 
-        return 'Đang chuyển';
 
 
+borderRadius: BorderRadius.circular(20),
 
-      default:
 
-        return status;
 
-    }
+),
 
-  }
 
 
+child: Text(
 
-  // ============================================================
 
-  // STATUS COLOR
 
-  // ============================================================
+_statusLabel(status),
 
 
 
-  Color _statusColor(String status) {
+style: TextStyle(
 
-    switch (status) {
 
-      case 'PENDING':
 
-        return Colors.orange;
+color: _statusColor(status),
 
 
 
-      case 'APPROVED':
+fontSize: 12,
 
-        return Colors.blue;
 
 
+fontWeight: FontWeight.bold,
 
-      case 'RESOLVED':
 
-        return Colors.green;
 
+),
 
 
-      case 'REJECTED':
 
-        return Colors.red;
+),
 
 
 
-      case 'FORWARDING':
+);
 
-        return Colors.purple;
 
 
+}
 
-      default:
 
-        return Colors.grey;
 
-    }
+// ============================================================
 
-  }
 
 
+// STATUS LABEL
 
-  // ============================================================
 
-  // DATE
 
-  // ============================================================
+// ============================================================
 
 
 
-  String _formatDate(DateTime? date) {
+String _statusLabel(String status) {
 
-    if (date == null) {
 
-      return 'Không rõ thời gian';
 
-    }
+switch (status) {
 
 
 
-    final day = date.day.toString().padLeft(2, '0');
+case 'PENDING':
 
-    final month = date.month.toString().padLeft(2, '0');
 
-    final year = date.year.toString();
 
+return 'Chờ xử lý';
 
 
-    final hour = date.hour.toString().padLeft(2, '0');
 
-    final minute = date.minute.toString().padLeft(2, '0');
+case 'APPROVED':
 
 
 
-    return '$day/$month/$year $hour:$minute';
+return 'Đã tiếp nhận';
 
-  }
 
 
+case 'RESOLVED':
 
-  // ============================================================
 
-  // FILE SIZE
 
-  // ============================================================
+return 'Đã giải quyết';
 
 
 
-  String _formatFileSize(int? bytes) {
+case 'REJECTED':
 
-    if (bytes == null || bytes <= 0) {
 
-      return 'Không rõ dung lượng';
 
-    }
+return 'Từ chối';
 
 
 
-    if (bytes < 1024) {
+case 'FORWARDING':
 
-      return '$bytes B';
 
-    }
 
+return 'Đang chuyển';
 
 
-    if (bytes < 1024 * 1024) {
 
-      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+default:
 
-    }
 
 
+return status;
 
-    if (bytes < 1024 * 1024 * 1024) {
 
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 
-    }
+}
 
 
 
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+}
 
-  }
+
+
+// ============================================================
+
+
+
+// STATUS COLOR
+
+
+
+// ============================================================
+
+
+
+Color _statusColor(String status) {
+
+
+
+switch (status) {
+
+
+
+case 'PENDING':
+
+
+
+return Colors.orange;
+
+
+
+case 'APPROVED':
+
+
+
+return Colors.blue;
+
+
+
+case 'RESOLVED':
+
+
+
+return Colors.green;
+
+
+
+case 'REJECTED':
+
+
+
+return Colors.red;
+
+
+
+case 'FORWARDING':
+
+
+
+return Colors.purple;
+
+
+
+default:
+
+
+
+return Colors.grey;
+
+
+
+}
+
+
+
+}
+
+
+
+// ============================================================
+
+
+
+// DATE
+
+
+
+// ============================================================
+
+
+
+String _formatDate(DateTime? date) {
+
+
+
+if (date == null) {
+
+
+
+return 'Không rõ thời gian';
+
+
+
+}
+
+
+
+final day = date.day.toString().padLeft(2, '0');
+
+
+
+final month = date.month.toString().padLeft(2, '0');
+
+
+
+final year = date.year.toString();
+
+
+
+final hour = date.hour.toString().padLeft(2, '0');
+
+
+
+final minute = date.minute.toString().padLeft(2, '0');
+
+
+
+return '$day/$month/$year $hour:$minute';
+
+
+
+}
+
+
+
+// ============================================================
+
+
+
+// FILE SIZE
+
+
+
+// ============================================================
+
+
+
+String _formatFileSize(int? bytes) {
+
+
+
+if (bytes == null || bytes <= 0) {
+
+
+
+return 'Không rõ dung lượng';
+
+
+
+}
+
+
+
+if (bytes < 1024) {
+
+
+
+return '$bytes B';
+
+
+
+}
+
+
+
+if (bytes < 1024 * 1024) {
+
+
+
+return '${(bytes / 1024).toStringAsFixed(1)} KB';
+
+
+
+}
+
+
+
+if (bytes < 1024 * 1024 * 1024) {
+
+
+
+return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+
+
+
+}
+
+
+
+return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+
+
+
+}
+
+
 
 }
