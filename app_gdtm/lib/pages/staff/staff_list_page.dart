@@ -1,5 +1,8 @@
 import 'package:app_gdtm/pages/staff/feedback_detail_page.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
@@ -61,6 +64,8 @@ class _StaffListPageState extends State<StaffListPage> {
 
   final RequestService _service = RequestService();
 
+  StreamSubscription<List<Request>>? _requestsSubscription;
+
   final TextEditingController _searchController = TextEditingController();
 
   bool _loading = true;
@@ -74,11 +79,15 @@ class _StaffListPageState extends State<StaffListPage> {
   String _selectedStatus = 'ALL';
 
   String _selectedCategory = 'ALL';
+
   final Map<String, String> _categoryNamesById = {};
 
   final ScrollController _scrollController = ScrollController();
+
   int _visibleCount = 12;
+
   static const int _loadMoreCount = 12;
+
   bool _loadingMore = false;
 
   final List<String> _statuses = const [
@@ -106,6 +115,7 @@ class _StaffListPageState extends State<StaffListPage> {
     _selectedStatus = widget.initialStatus ?? 'ALL';
 
     _searchController.addListener(_applyFilters);
+
     _scrollController.addListener(_onScroll);
 
     _loadRequests();
@@ -116,9 +126,14 @@ class _StaffListPageState extends State<StaffListPage> {
 
     void dispose() {
 
+    _requestsSubscription?.cancel();
+
     _searchController.removeListener(_applyFilters);
+
     _scrollController.removeListener(_onScroll);
+
     _scrollController.dispose();
+
     _searchController.dispose();
 
     super.dispose();
@@ -126,167 +141,238 @@ class _StaffListPageState extends State<StaffListPage> {
   }
 
   Future<void> _loadRequests() async {
-
     if (mounted) {
-
       setState(() {
-
         _loading = true;
-
         _error = null;
-
       });
-
     }
 
-    try {
+    await _requestsSubscription?.cancel();
 
-      final results = await Future.wait([
-        _service.getStaffFeedbacks(
+    _requestsSubscription = _service
+        .watchStaffFeedbacks(
           role: widget.role,
           departmentId: widget.departmentId,
-        ),
-        FirebaseFirestore.instance.collection('categories').get(),
-      ]);
+        )
+        .listen(
+          (data) {
+            if (!mounted) return;
 
-      final data = results[0] as List<Request>;
+            setState(() {
+              _allRequests = data;
+
+              if (!_categoryOptions.contains(_selectedCategory)) {
+                _selectedCategory = 'ALL';
+              }
+
+              _loading = false;
+              _error = null;
+            });
+
+            _applyFilters();
+          },
+          onError: (error) {
+            if (!mounted) return;
+
+            setState(() {
+              _loading = false;
+              _error = error.toString();
+            });
+          },
+        );
+
+    try {
       final categorySnapshot =
-          results[1] as QuerySnapshot<Map<String, dynamic>>;
+          await FirebaseFirestore.instance.collection('categories').get();
 
       final categoryMap = <String, String>{};
+
       for (final doc in categorySnapshot.docs) {
         final value = doc.data();
+
         final id = (value['id'] ?? doc.id).toString().trim();
+
         final name =
             (value['subject'] ?? value['name'] ?? value['title'] ?? '')
                 .toString()
                 .trim();
+
         if (id.isNotEmpty && name.isNotEmpty) {
           categoryMap[id] = name;
         }
       }
 
       if (!mounted) return;
+
       setState(() {
-        _allRequests = data;
         _categoryNamesById
           ..clear()
           ..addAll(categoryMap);
-
-        if (!_categoryOptions.contains(_selectedCategory)) {
-          _selectedCategory = 'ALL';
-        }
-
-        _loading = false;
       });
 
       _applyFilters();
-
     } catch (e) {
-
       if (!mounted) return;
 
       setState(() {
-
-        _loading = false;
-
         _error = e.toString();
-
       });
-
     }
-
   }
 
   List<String> get _categoryOptions {
+
     final names = <String>{};
+
     for (final request in _allRequests) {
+
       names.addAll(_requestCategoryNames(request));
+
     }
 
     final result = names
+
         .where((name) => name.trim().isNotEmpty)
+
         .map((name) => name.trim())
+
         .toSet()
+
         .toList()
+
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
     return ['ALL', ...result];
+
   }
 
   List<String> _requestCategoryIds(Request request) {
+
     return request.categoryIds
+
         .map((id) => id.trim())
+
         .where((id) => id.isNotEmpty)
+
         .toList();
+
   }
 
   List<String> _requestCategoryNames(Request request) {
+
     final names = <String>{};
 
     for (final id in _requestCategoryIds(request)) {
+
       final name = _categoryNamesById[id];
+
       if (name != null && name.trim().isNotEmpty) {
+
         names.add(name.trim());
+
       }
+
     }
 
     if (names.isEmpty) {
+
       for (final category in request.categories) {
+
         final name = category.subject?.trim() ?? '';
+
         if (name.isNotEmpty) {
+
           names.add(name);
+
         }
+
       }
+
     }
 
     return names.toList();
+
   }
 
   Widget _categoryChip(String text) {
+
     return Container(
+
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+
       decoration: BoxDecoration(
+
         color: const Color(0xFFF8FAFC),
+
         borderRadius: BorderRadius.circular(8),
+
         border: Border.all(color: borderColor),
+
       ),
+
       child: Row(
+
         mainAxisSize: MainAxisSize.min,
+
         children: [
+
           const Icon(
+
             Icons.category_outlined,
+
             size: 14,
+
             color: textSecondary,
+
           ),
+
           const SizedBox(width: 5),
+
           ConstrainedBox(
+
             constraints: const BoxConstraints(maxWidth: 220),
+
             child: Text(
+
               text,
+
               overflow: TextOverflow.ellipsis,
+
               style: const TextStyle(
+
                 color: textSecondary,
+
                 fontSize: 12,
+
                 fontWeight: FontWeight.w500,
+
               ),
+
             ),
+
           ),
+
         ],
+
       ),
+
     );
+
   }
-
-
 
   void _resetFilters() {
 
     _searchController.clear();
 
     setState(() {
+
       _selectedStatus = 'ALL';
+
       _selectedCategory = 'ALL';
+
       _visibleCount = _loadMoreCount.clamp(0, _filteredRequests.length);
+
     });
 
     _applyFilters();
@@ -294,28 +380,41 @@ class _StaffListPageState extends State<StaffListPage> {
   }
 
   void _onScroll() {
+
     if (!_scrollController.hasClients || _loadingMore) return;
 
     final position = _scrollController.position;
+
     if (position.pixels >= position.maxScrollExtent - 500) {
+
       _loadMore();
+
     }
+
   }
 
   void _loadMore() {
+
     if (_loadingMore || _visibleCount >= _filteredRequests.length) return;
 
     setState(() => _loadingMore = true);
 
     Future.delayed(const Duration(milliseconds: 250), () {
+
       if (!mounted) return;
 
       setState(() {
+
         _visibleCount = (_visibleCount + _loadMoreCount)
+
             .clamp(0, _filteredRequests.length);
+
         _loadingMore = false;
+
       });
+
     });
+
   }
 
   void _applyFilters() {
@@ -325,60 +424,95 @@ class _StaffListPageState extends State<StaffListPage> {
     var result = List<Request>.from(_allRequests);
 
     if (keyword.isNotEmpty) {
+
       result = result.where((r) {
+
         final subject = r.subject?.toLowerCase() ?? '';
+
         final description = r.description?.toLowerCase() ?? '';
+
         final location = r.location?.toLowerCase() ?? '';
+
         final userName = r.user?.fullName?.toLowerCase() ?? '';
 
         return subject.contains(keyword) ||
+
             description.contains(keyword) ||
+
             location.contains(keyword) ||
+
             userName.contains(keyword);
+
       }).toList();
+
     }
 
     if (_selectedStatus != 'ALL') {
+
       result = result
+
           .where((r) => r.currentStatus == _selectedStatus)
+
           .toList();
+
     }
 
     if (_selectedCategory != 'ALL') {
+
       String? selectedId;
 
       for (final entry in _categoryNamesById.entries) {
+
         if (entry.value == _selectedCategory) {
+
           selectedId = entry.key;
+
           break;
+
         }
+
       }
 
       result = result.where((request) {
+
         if (selectedId != null) {
+
           return _requestCategoryIds(request).contains(selectedId);
+
         }
+
         return _requestCategoryNames(request).contains(_selectedCategory);
+
       }).toList();
+
     }
 
     // Mặc định: mới nhất trước.
+
     result.sort((a, b) {
+
       final aTime = a.timeCreate;
+
       final bTime = b.timeCreate;
 
       if (aTime == null && bTime == null) return 0;
+
       if (aTime == null) return 1;
+
       if (bTime == null) return -1;
 
       return bTime.compareTo(aTime);
+
     });
 
     if (!mounted) return;
 
     setState(() {
+
       _filteredRequests = result;
+
       _visibleCount = _loadMoreCount.clamp(0, result.length);
+
     });
 
   }
@@ -488,22 +622,37 @@ class _StaffListPageState extends State<StaffListPage> {
   }
 
   Future<void> _openDetail(Request request) async {
+
     final changed = await Navigator.push<bool>(
+
       context,
+
       MaterialPageRoute(
+
         builder: (_) => FeedbackDetailPage(
+
           request: request,
+
           role: widget.role,
+
           departmentId: widget.departmentId,
+
           departments: const [],
+
           staffUserId: widget.staffUserId,
+
         ),
+
       ),
+
     );
 
     if (changed == true && mounted) {
+
       await _loadRequests();
+
     }
+
   }
 
   Widget _statusBadge(String? status) {
@@ -665,132 +814,247 @@ class _StaffListPageState extends State<StaffListPage> {
   }
 
   Widget _buildSearchAndFilter() {
+
     return Container(
+
       padding: const EdgeInsets.all(16),
+
       decoration: BoxDecoration(
+
         color: Colors.white,
+
         borderRadius: BorderRadius.circular(16),
+
         border: Border.all(color: borderColor),
+
       ),
+
       child: Column(
+
         crossAxisAlignment: CrossAxisAlignment.start,
+
         children: [
+
           TextField(
+
             controller: _searchController,
+
             decoration: InputDecoration(
+
               hintText: 'Tìm theo tiêu đề, nội dung, vị trí, người gửi...',
+
               prefixIcon: const Icon(Icons.search_rounded),
+
               suffixIcon: _searchController.text.isEmpty
+
                   ? null
+
                   : IconButton(
+
                       onPressed: _searchController.clear,
+
                       icon: const Icon(Icons.clear),
+
                     ),
+
               filled: true,
+
               fillColor: const Color(0xFFF8FAFC),
+
               border: OutlineInputBorder(
+
                 borderRadius: BorderRadius.circular(11),
+
                 borderSide: const BorderSide(color: borderColor),
+
               ),
+
               enabledBorder: OutlineInputBorder(
+
                 borderRadius: BorderRadius.circular(11),
+
                 borderSide: const BorderSide(color: borderColor),
+
               ),
+
             ),
+
             onChanged: (_) => setState(() {}),
+
           ),
 
           const SizedBox(height: 14),
 
           DropdownButtonFormField<String>(
+
             value: _selectedStatus,
+
             isExpanded: true,
+
             decoration: InputDecoration(
+
               labelText: 'Trạng thái',
+
               prefixIcon: const Icon(Icons.filter_alt_outlined),
+
               filled: true,
+
               fillColor: const Color(0xFFF8FAFC),
+
               contentPadding: const EdgeInsets.symmetric(
+
                 horizontal: 12,
+
                 vertical: 12,
+
               ),
+
               border: OutlineInputBorder(
+
                 borderRadius: BorderRadius.circular(11),
+
                 borderSide: const BorderSide(color: borderColor),
+
               ),
+
               enabledBorder: OutlineInputBorder(
+
                 borderRadius: BorderRadius.circular(11),
+
                 borderSide: const BorderSide(color: borderColor),
+
               ),
+
             ),
+
             items: _statuses.map((status) {
+
               return DropdownMenuItem<String>(
+
                 value: status,
+
                 child: Text(
+
                   status == 'ALL' ? 'Tất cả trạng thái' : _statusLabel(status),
+
                   overflow: TextOverflow.ellipsis,
+
                 ),
+
               );
+
             }).toList(),
+
             onChanged: (value) {
+
               if (value == null) return;
+
               setState(() => _selectedStatus = value);
+
               _applyFilters();
+
             },
+
           ),
 
           const SizedBox(height: 12),
 
           DropdownButtonFormField<String>(
+
             value: _selectedCategory,
+
             isExpanded: true,
+
             decoration: InputDecoration(
+
               labelText: 'Danh mục',
+
               prefixIcon: const Icon(Icons.category_outlined),
+
               filled: true,
+
               fillColor: const Color(0xFFF8FAFC),
+
               contentPadding: const EdgeInsets.symmetric(
+
                 horizontal: 12,
+
                 vertical: 12,
+
               ),
+
               border: OutlineInputBorder(
+
                 borderRadius: BorderRadius.circular(11),
+
                 borderSide: const BorderSide(color: borderColor),
+
               ),
+
               enabledBorder: OutlineInputBorder(
+
                 borderRadius: BorderRadius.circular(11),
+
                 borderSide: const BorderSide(color: borderColor),
+
               ),
+
             ),
+
             items: _categoryOptions.map((category) {
+
               return DropdownMenuItem<String>(
+
                 value: category,
+
                 child: Text(
+
                   category == 'ALL' ? 'Tất cả danh mục' : category,
+
                   overflow: TextOverflow.ellipsis,
+
                 ),
+
               );
+
             }).toList(),
+
             onChanged: (value) {
+
               if (value == null) return;
+
               setState(() => _selectedCategory = value);
+
               _applyFilters();
+
             },
+
           ),
 
           const SizedBox(height: 14),
 
           SizedBox(
+
             width: double.infinity,
+
             child: OutlinedButton.icon(
+
               onPressed: _resetFilters,
+
               icon: const Icon(Icons.restart_alt_rounded, size: 18),
+
               label: const Text('Đặt lại bộ lọc'),
+
             ),
+
           ),
+
         ],
+
       ),
+
     );
+
   }
 
   Widget _buildRequestCard(Request request) {
@@ -882,26 +1146,45 @@ class _StaffListPageState extends State<StaffListPage> {
               ),
 
               Builder(
+
                 builder: (_) {
+
                   final categories = _requestCategoryNames(request);
+
                   if (categories.isEmpty) {
+
                     return const SizedBox.shrink();
+
                   }
+
                   return Padding(
+
                     padding: const EdgeInsets.only(top: 10, bottom: 2),
+
                     child: Wrap(
+
                       spacing: 8,
+
                       runSpacing: 7,
+
                       children: categories
+
                           .map((category) => _categoryChip(category))
+
                           .toList(),
+
                     ),
+
                   );
+
                 },
+
               ),
 
               const SizedBox(height: 13),
+
               Text(
+
                 request.description?.trim().isNotEmpty == true
 
                     ? request.description!
@@ -1041,189 +1324,349 @@ class _StaffListPageState extends State<StaffListPage> {
   }
 
       Widget _buildBody({required double horizontal}) {
+
     if (_loading) {
+
       return const Center(
+
         child: CircularProgressIndicator(color: hcmuteBlue),
+
       );
+
     }
 
     if (_error != null) {
+
       return Center(
+
         child: Container(
+
           constraints: const BoxConstraints(maxWidth: 520),
+
           padding: const EdgeInsets.all(28),
+
           decoration: BoxDecoration(
+
             color: Colors.white,
+
             borderRadius: BorderRadius.circular(16),
+
             border: Border.all(color: borderColor),
+
           ),
+
           child: Column(
+
             mainAxisSize: MainAxisSize.min,
+
             children: [
+
               const Icon(
+
                 Icons.error_outline,
+
                 color: Color(0xFFDC2626),
+
                 size: 52,
+
               ),
+
               const SizedBox(height: 12),
+
               const Text(
+
                 'Không thể tải danh sách góp ý',
+
                 style: TextStyle(
+
                   color: textPrimary,
+
                   fontSize: 18,
+
                   fontWeight: FontWeight.w800,
+
                 ),
+
               ),
+
               const SizedBox(height: 8),
+
               Text(
+
                 _error!,
+
                 textAlign: TextAlign.center,
+
                 style: const TextStyle(color: textSecondary),
+
               ),
+
               const SizedBox(height: 18),
+
               FilledButton.icon(
+
                 onPressed: _loadRequests,
+
                 icon: const Icon(Icons.refresh),
+
                 label: const Text('Thử lại'),
+
               ),
+
             ],
+
           ),
+
         ),
+
       );
+
     }
 
     if (_filteredRequests.isEmpty) {
+
       return RefreshIndicator(
+
         onRefresh: _loadRequests,
+
         child: ListView(
+
           controller: _scrollController,
+
           physics: const AlwaysScrollableScrollPhysics(),
+
           padding: EdgeInsets.fromLTRB(horizontal, 20, horizontal, 24),
+
           children: [
+
             _buildTopHeader(),
+
             Padding(
+
               padding: const EdgeInsets.only(top: 16, bottom: 16),
+
               child: _buildSearchAndFilter(),
+
             ),
+
             const SizedBox(height: 90),
+
             const Icon(
+
               Icons.inbox_outlined,
+
               size: 68,
+
               color: Color(0xFF98A2B3),
+
             ),
+
             const SizedBox(height: 16),
+
             const Center(
+
               child: Text(
+
                 'Không có góp ý nào',
+
                 style: TextStyle(
+
                   color: textPrimary,
+
                   fontSize: 17,
+
                   fontWeight: FontWeight.w700,
+
                 ),
+
               ),
+
             ),
+
             const SizedBox(height: 6),
+
             const Center(
+
               child: Text(
+
                 'Thử thay đổi từ khóa hoặc bộ lọc.',
+
                 style: TextStyle(color: textSecondary),
+
               ),
+
             ),
+
           ],
+
         ),
+
       );
+
     }
 
     final visibleCount = _visibleCount.clamp(0, _filteredRequests.length);
+
     final hasMore = visibleCount < _filteredRequests.length;
 
     return RefreshIndicator(
+
       onRefresh: _loadRequests,
+
       child: ListView.builder(
+
         controller: _scrollController,
+
         physics: const AlwaysScrollableScrollPhysics(),
+
         padding: EdgeInsets.fromLTRB(horizontal, 20, horizontal, 24),
+
         itemCount: 2 + visibleCount + (hasMore || _loadingMore ? 1 : 0),
+
         itemBuilder: (context, index) {
+
           if (index == 0) {
+
             return _buildTopHeader();
+
           }
 
           if (index == 1) {
+
             return Padding(
+
               padding: const EdgeInsets.only(top: 16, bottom: 16),
+
               child: _buildSearchAndFilter(),
+
             );
+
           }
 
           final requestIndex = index - 2;
 
           if (requestIndex < visibleCount) {
+
             return _buildRequestCard(_filteredRequests[requestIndex]);
+
           }
 
           if (_loadingMore) {
+
             return const Padding(
+
               padding: EdgeInsets.symmetric(vertical: 20),
+
               child: Center(
+
                 child: SizedBox(
+
                   width: 24,
+
                   height: 24,
+
                   child: CircularProgressIndicator(
+
                     strokeWidth: 2.5,
+
                     color: hcmuteBlue,
+
                   ),
+
                 ),
+
               ),
+
             );
+
           }
 
           return const Padding(
+
             padding: EdgeInsets.symmetric(vertical: 18),
+
             child: Center(
+
               child: Text(
+
                 'Đã tải hết danh sách góp ý',
+
                 style: TextStyle(
+
                   color: textSecondary,
+
                   fontSize: 12.5,
+
                 ),
+
               ),
+
             ),
+
           );
+
         },
+
       ),
+
     );
+
   }
 
   @override
+
   Widget build(BuildContext context) {
+
     return Container(
+
       color: pageBackground,
+
       child: LayoutBuilder(
+
         builder: (context, constraints) {
+
           final desktop = constraints.maxWidth >= 900;
+
           final horizontal = desktop ? 42.0 : 16.0;
+
           return _buildBody(horizontal: horizontal);
+
         },
+
       ),
+
     );
+
   }
 
 }
 
 /// Tạo phần đuôi tam giác cho thanh tiêu đề màu xám.
+
 class _StaffHeaderTriangleClipper extends CustomClipper<Path> {
+
   @override
+
   Path getClip(Size size) {
+
     final path = Path();
+
     path.moveTo(0, 0);
+
     path.lineTo(size.width, 0);
+
     path.lineTo(size.width - 45, size.height);
+
     path.lineTo(0, size.height);
+
     path.close();
+
     return path;
+
   }
 
   @override
+
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+
 }
