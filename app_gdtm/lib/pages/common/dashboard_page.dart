@@ -37,6 +37,7 @@ import 'package:app_gdtm/services/comment_report_service.dart';
 import 'package:app_gdtm/pages/admin/violation_comments_page.dart';
 import 'package:app_gdtm/services/post_report_service.dart';
 import 'package:app_gdtm/pages/admin/violation_posts_page.dart';
+import 'package:app_gdtm/pages/admin/feedback_list_page.dart';
 
 /// Trang chủ dashboard: khung (header + menu) dùng chung,
 /// menu và nội dung đổi theo role và mục menu được chọn.
@@ -398,6 +399,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
       case UserRole.admin:
         switch (_selectedId) {
+          case 'feedback_inbox':
+            return const AdminFeedbackListPage();
+
           case 'notifications':
             return NotificationPage(
               user: widget.user,
