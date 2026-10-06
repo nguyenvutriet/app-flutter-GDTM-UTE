@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'dart:async';
 
 import 'package:app_gdtm/models/enums/user_role.dart';
 import 'package:app_gdtm/models/Notification.dart' as app_notification;
@@ -38,6 +39,8 @@ import 'package:app_gdtm/pages/admin/violation_comments_page.dart';
 import 'package:app_gdtm/services/post_report_service.dart';
 import 'package:app_gdtm/pages/admin/violation_posts_page.dart';
 import 'package:app_gdtm/pages/admin/feedback_list_page.dart';
+import 'package:app_gdtm/services/admin_notification_service.dart';
+import 'package:app_gdtm/pages/admin/admin_notification_page.dart';
 
 /// Trang chủ dashboard: khung (header + menu) dùng chung,
 /// menu và nội dung đổi theo role và mục menu được chọn.
@@ -107,13 +110,21 @@ class _DashboardPageState extends State<DashboardPage> {
     currentUserId: () => widget.user.id,
   );
 
-  // ============================================================
-  // LIÊN KẾT BÀI VIẾT
-  // ============================================================
+  final AdminNotificationService _adminNotifications = AdminNotificationService();
+  StreamSubscription<int>? _adminUnreadSub;
+  int _adminUnread = 0;
 
   @override
   void initState() {
     super.initState();
+    if (widget.role == UserRole.admin) {
+      _adminUnreadSub = _adminNotifications.watchUnreadCount().listen(
+        (n) {
+          if (mounted) setState(() => _adminUnread = n);
+        },
+        onError: (_) {},
+      );
+    }
     // Link bài viết (trong bình luận, nội dung bài...) mở trang chi tiết qua hàm này
     PostLink.openHandler = _openPostById;
     // Nếu người dùng vào app bằng link bài viết (web) thì mở bài đó sau khi đăng nhập
@@ -122,6 +133,10 @@ class _DashboardPageState extends State<DashboardPage> {
       if (id != null && mounted) _openPostById(id);
     });
   }
+
+  // ============================================================
+  // LIÊN KẾT BÀI VIẾT
+  // ============================================================
 
   /// Mở trang chi tiết bài viết theo id (chỉ bài công khai).
   Future<void> _openPostById(String postId) async {
@@ -137,6 +152,52 @@ class _DashboardPageState extends State<DashboardPage> {
       );
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
+  /// Admin bấm vào thông báo báo cáo: mở bài viết gốc và cuộn tới đúng bình luận bị báo cáo
+  /// (giống nút "Xem" ở trang bình luận vi phạm). Báo cáo bài viết thì mở thẳng bài đó.
+  /// Không mở được (thiếu requestId / bài đã bị xóa / lỗi) thì quay về trang xử lý như cũ.
+  Future<void> _openAdminNotification(AdminNotification n) async {
+    void fallback() {
+      if (!mounted) return;
+      setState(() {
+        _selectedId = n.isPostReport ? 'violation_posts' : 'violation_comments';
+      });
+    }
+
+    final requestId = n.requestId;
+    if (requestId == null || requestId.isEmpty) {
+      fallback();
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final post = await _forum.getPostDetail(requestId);
+      if (!mounted) return;
+      if (post == null) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Bài viết không còn tồn tại')),
+        );
+        fallback();
+        return;
+      }
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PostDetailPage(
+            initialPost: post,
+            service: _forum,
+            // Báo cáo bình luận: cuộn tới đúng bình luận bị báo cáo
+            focusCommentId: n.isPostReport ? null : n.targetId,
+            canReport: false, // admin không báo cáo
+          ),
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      fallback();
     }
   }
 
@@ -221,7 +282,8 @@ class _DashboardPageState extends State<DashboardPage> {
         ];
 
       case UserRole.admin:
-        return const [
+        // Không dùng `const` ở đây: title của mục "Thông báo" phụ thuộc _adminUnread (runtime).
+        return [
           AppMenuSection(
             title: '',
             items: [
@@ -252,7 +314,8 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               AppMenuItem(
                 id: 'notifications',
-                title: 'Thông báo',
+                // title: 'Thông báo',
+                title: _adminUnread > 0 ? 'Thông báo ($_adminUnread)' : 'Thông báo',
                 icon: Icons.notifications,
               ),
               AppMenuItem(
@@ -402,13 +465,20 @@ class _DashboardPageState extends State<DashboardPage> {
           case 'feedback_inbox':
             return const AdminFeedbackListPage();
 
+          // case 'notifications':
+          //   return NotificationPage(
+          //     user: widget.user,
+          //     initialNotification: _initialNotification,
+          //     onOpenFeedback: _openFeedbackFromNotification,
+          //     onReadChanged: _onNotificationReadChanged,
+          //   );
+
           case 'notifications':
-            return NotificationPage(
-              user: widget.user,
-              initialNotification: _initialNotification,
-              onOpenFeedback: _openFeedbackFromNotification,
-              onReadChanged: _onNotificationReadChanged,
+            return AdminNotificationPage(
+              service: _adminNotifications,
+              onOpenReport: _openAdminNotification,
             );
+
           case 'forum':
             return _forumPage();
           // TODO: case 'manage_categories': return const CategoriesPage();
@@ -526,6 +596,7 @@ class _DashboardPageState extends State<DashboardPage> {
   void dispose() {
     PostLink.openHandler = null;
     _notificationReadNotifier.dispose();
+    _adminUnreadSub?.cancel();
     super.dispose();
   }
 

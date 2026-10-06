@@ -5,6 +5,7 @@
 // Mọi hàm đều yêu cầu đăng nhập.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 import 'package:app_gdtm/models/Comment.dart';
 import 'package:app_gdtm/models/VoteId.dart';
@@ -200,7 +201,7 @@ class ForumService {
     );
   }
 
-    // ==================================================================
+  // ==================================================================
   // BÁO CÁO / ẨN BÀI VIẾT
   // ==================================================================
 
@@ -235,6 +236,15 @@ class ForumService {
         'createdAt': Timestamp.now(),
       });
     });
+    await _notifyAdmins(
+      type: 'POST_REPORT',
+      reportId: ref.id,
+      title: 'Bài viết bị báo cáo',
+      what: 'bài viết "${_clip(m['subject']?.toString() ?? '')}"',
+      reason: text,
+      requestId: postId,
+      targetId: postId,
+    );
   }
 
   /// Id các bài viết mà người dùng hiện tại đã báo cáo.
@@ -394,6 +404,15 @@ class ForumService {
         'createdAt': Timestamp.now(),
       });
     });
+    await _notifyAdmins(
+      type: 'COMMENT_REPORT',
+      reportId: ref.id,
+      title: 'Bình luận bị báo cáo',
+      what: 'bình luận "${_clip(cDoc.data()?['content']?.toString() ?? '')}"',
+      reason: text,
+      requestId: cDoc.data()?['requestId']?.toString(),
+      targetId: commentId,
+    );
   }
 
   /// Admin ẩn / hiện lại một bình luận bất kỳ (không cần có báo cáo).
@@ -513,6 +532,45 @@ class ForumService {
   // ==================================================================
   // NỘI BỘ
   // ==================================================================
+
+  static const String adminNotificationsCollection = 'adminnotification';
+
+  String _clip(String s, [int n = 60]) {
+    final t = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return t.length <= n ? t : '${t.substring(0, n)}…';
+  }
+
+  /// Báo cho admin biết có báo cáo mới (hiện realtime ở trang Thông báo của admin).
+  /// Doc id cố định theo báo cáo nên không bị tạo trùng.
+  /// Lỗi ở đây không làm hỏng việc báo cáo (chỉ ghi log để dễ gỡ lỗi,
+  /// ví dụ khi Firestore rules chặn ghi vào adminnotification).
+  Future<void> _notifyAdmins({
+    required String type,
+    required String reportId,
+    required String title,
+    required String what,
+    required String reason,
+    String? requestId,
+    String? targetId,
+  }) async {
+    try {
+      final uid = _uid;
+      final reporter = _userName((await _loadUsers({uid}))[uid]);
+      await _db.collection(adminNotificationsCollection).doc('${type}_$reportId').set({
+        'type': type,
+        'title': title,
+        'content': '$reporter báo cáo $what — lý do: $reason',
+        'requestId': requestId,
+        'targetId': targetId,
+        'reportId': reportId,
+        'reporterId': uid,
+        'isRead': false,
+        'createdAt': Timestamp.now(),
+      });
+    } catch (e) {
+      debugPrint('[ForumService] _notifyAdmins thất bại ($type/$reportId): $e');
+    }
+  }
 
   String _validType(String type) {
     final t = type.toUpperCase();
