@@ -4,17 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:app_gdtm/pages/login/login_page.dart';
 import 'package:app_gdtm/widgets/app_colors.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  await dotenv.load(fileName: '.env', isOptional: true);
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Chỉ Android/iOS mới cần GoogleSignIn.initialize().
-  // Web dùng Firebase Auth popup.
+  // Chỉ Android/iOS mới cần. Web dùng popup của Firebase Auth.
   if (!kIsWeb) {
     await GoogleSignIn.instance.initialize(
       serverClientId: 'abc.apps.googleusercontent.com',
@@ -40,8 +42,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
 
-      // Mở app vào trang đăng nhập.
-      // Sau khi đăng nhập sẽ điều hướng theo role.
+      // Mở app vào trang đăng nhập; đăng nhập xong mới vào DashboardPage theo role
       home: const LoginPage(),
     );
   }

@@ -24,8 +24,8 @@ const String _studentLabel = 'Ẩn danh';
 
 /// Hộp thoại "Trao đổi với sinh viên" của cán bộ (staff).
 ///
-/// Thay cho `_ConversationDialog` cũ trong `staff_list_page.dart`, giữ nguyên
-/// khung cũ (biểu tượng + tiêu đề + nội dung + nút "Đóng"):
+/// Thay cho `_ConversationDialog` cũ trong `feedback_detail_page.dart`, giữ
+/// khung hộp thoại như thiết kế (biểu tượng + tiêu đề + nội dung + nút "Đóng"):
 ///   - Chưa có cuộc trao đổi: "Chưa có cuộc trao đổi nào." + nút "Mở hội thoại".
 ///   - Bấm "Mở hội thoại": form 2 ô (Chủ đề, Tin nhắn) + nút "Mở hội thoại".
 ///   - Đã có cuộc trao đổi: khung chat thời gian thực (giống giao diện web),
@@ -35,6 +35,7 @@ class StaffConversationDialog extends StatefulWidget {
     super.key,
     required this.request,
     required this.staffUserId,
+    this.canOperate = true,
     this.service,
   });
 
@@ -43,6 +44,11 @@ class StaffConversationDialog extends StatefulWidget {
 
   /// Mã tài khoản cán bộ đang đăng nhập (widget.staffUserId của StaffListPage).
   final String staffUserId;
+
+  /// Staff hiện tại có được thao tác trên góp ý này không (truyền
+  /// `_canOperateRequest` của trang chi tiết). `false` = chỉ xem: không mở
+  /// hội thoại, không nhắn, không đóng trao đổi.
+  final bool canOperate;
 
   /// Cho phép truyền service riêng (mặc định tự tạo).
   final ConversationChatService? service;
@@ -136,7 +142,7 @@ class _StaffConversationDialogState extends State<StaffConversationDialog> {
 
         // Chưa có cuộc trao đổi nào.
         if (conversations.isEmpty) {
-          if (_composing) {
+          if (_composing && widget.canOperate) {
             return _OpenConversationForm(
               service: _service,
               request: widget.request,
@@ -146,6 +152,7 @@ class _StaffConversationDialogState extends State<StaffConversationDialog> {
             );
           }
           return _EmptyState(
+            canOpen: widget.canOperate,
             onOpen: () => setState(() => _composing = true),
           );
         }
@@ -172,6 +179,7 @@ class _StaffConversationDialogState extends State<StaffConversationDialog> {
                 conversation: selected,
                 request: widget.request,
                 staffUserId: widget.staffUserId,
+                canOperate: widget.canOperate,
                 service: _service,
               ),
             ),
@@ -205,9 +213,12 @@ class _CenterText extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onOpen});
+  const _EmptyState({required this.onOpen, required this.canOpen});
 
   final VoidCallback onOpen;
+
+  /// `false` khi staff không còn quyền xử lý góp ý (chỉ xem).
+  final bool canOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -220,12 +231,19 @@ class _EmptyState extends StatelessWidget {
             style: TextStyle(color: _textSecondary),
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: onOpen,
-            style: FilledButton.styleFrom(backgroundColor: _blue),
-            icon: const Icon(Icons.add_comment_outlined, size: 18),
-            label: const Text('Mở hội thoại'),
-          ),
+          if (canOpen)
+            FilledButton.icon(
+              onPressed: onOpen,
+              style: FilledButton.styleFrom(backgroundColor: _blue),
+              icon: const Icon(Icons.add_comment_outlined, size: 18),
+              label: const Text('Mở hội thoại'),
+            )
+          else
+            const _InfoNotice(
+              icon: Icons.lock_outline,
+              text: 'Phòng ban của bạn không còn quyền xử lý góp ý này '
+                  'nên không thể mở hội thoại.',
+            ),
         ],
       ),
     );
@@ -480,12 +498,14 @@ class _ConversationChat extends StatefulWidget {
     required this.conversation,
     required this.request,
     required this.staffUserId,
+    required this.canOperate,
     required this.service,
   });
 
   final ConversationInfo conversation;
   final Request request;
   final String staffUserId;
+  final bool canOperate;
   final ConversationChatService service;
 
   @override
@@ -670,7 +690,16 @@ class _ConversationChatState extends State<_ConversationChat> {
               ],
             ),
           ),
-        isOpen ? _buildComposer() : _buildClosedNotice(),
+        if (!isOpen)
+          _buildClosedNotice()
+        else if (!widget.canOperate)
+          const _InfoNotice(
+            icon: Icons.lock_outline,
+            text: 'Phòng ban của bạn không còn quyền xử lý góp ý này nên '
+                'chỉ có thể xem trao đổi, không thể nhắn tiếp.',
+          )
+        else
+          _buildComposer(),
       ],
     );
   }
@@ -712,7 +741,8 @@ class _ConversationChatState extends State<_ConversationChat> {
       ],
     );
 
-    if (!isOpen) {
+    // Đã đóng, hoặc không có quyền thao tác: chỉ hiện thông tin, không có nút.
+    if (!isOpen || !widget.canOperate) {
       return Align(alignment: Alignment.centerLeft, child: info);
     }
 
@@ -923,27 +953,10 @@ class _ConversationChatState extends State<_ConversationChat> {
 
   /// Thay cho ô nhập khi cuộc trao đổi đã đóng (khoá cả hai bên).
   Widget _buildClosedNotice() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: _lightBlue,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _border),
-      ),
-      child: const Row(
-        children: [
-          Icon(Icons.lock_outline, size: 18, color: _textSecondary),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Cuộc trao đổi đã được đóng. Bạn chỉ có thể xem lại nội dung, '
-              'không thể nhắn tiếp.',
-              style: TextStyle(color: _textSecondary, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
+    return const _InfoNotice(
+      icon: Icons.lock_outline,
+      text: 'Cuộc trao đổi đã được đóng. Bạn chỉ có thể xem lại nội dung, '
+          'không thể nhắn tiếp.',
     );
   }
 
@@ -954,5 +967,38 @@ class _ConversationChatState extends State<_ConversationChat> {
     String two(int n) => n.toString().padLeft(2, '0');
     return '${two(d.day)}/${two(d.month)}/${d.year} '
         '${two(d.hour)}:${two(d.minute)}:${two(d.second)}';
+  }
+}
+
+/// Khung thông báo nhỏ (ổ khoá + nội dung) dùng cho các trạng thái chỉ xem.
+class _InfoNotice extends StatelessWidget {
+  const _InfoNotice({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: _lightBlue,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: _textSecondary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(color: _textSecondary, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
