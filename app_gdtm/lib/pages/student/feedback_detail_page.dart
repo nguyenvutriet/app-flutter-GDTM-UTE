@@ -4,7 +4,7 @@ import 'package:app_gdtm/models/Category.dart';
 import 'package:app_gdtm/models/ClarificationConversation.dart';
 import 'package:app_gdtm/models/Department.dart';
 import 'package:app_gdtm/models/FileAttachment.dart';
-import 'package:app_gdtm/models/Message.dart';
+import 'package:app_gdtm/pages/student/student_conversation_dialog.dart';
 import 'package:app_gdtm/models/Request.dart';
 import 'package:app_gdtm/models/Users.dart';
 import 'package:app_gdtm/pages/student/post_detail_page.dart';
@@ -721,15 +721,16 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
         borderRadius: BorderRadius.circular(11),
         border: Border.all(color: borderColor),
       ),
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 14),
-        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(11)),
+      child: ListTile(
+        onTap: () => showDialog<void>(
+          context: context,
+          builder: (_) => StudentConversationDialog(
+            request: widget.request,
+            studentId: widget.user.id ?? '',
+            initialConversationId: conversation.id,
+          ),
         ),
-        collapsedShape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(11)),
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14),
         leading: Container(
           width: 38,
           height: 38,
@@ -752,73 +753,13 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
           ),
         ),
         subtitle: Text(
-          open ? 'Đang mở' : 'Đã đóng',
+          open ? 'Đang mở · Nhấn để mở chat' : 'Đã đóng · Nhấn để xem',
           style: TextStyle(
             fontSize: 12,
             color: open ? const Color(0xFF16A34A) : textSecondary,
           ),
         ),
-        children: conversation.messages.isEmpty
-            ? [
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: EdgeInsets.only(top: 4),
-                    child: Text(
-                      'Chưa có tin nhắn.',
-                      style: TextStyle(color: textSecondary),
-                    ),
-                  ),
-                ),
-              ]
-            : conversation.messages.map(_messageTile).toList(),
-      ),
-    );
-  }
-
-  // ============================================================
-  // MESSAGE
-  // ============================================================
-
-  Widget _messageTile(Message message) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: borderColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            message.content ?? '—',
-            style: const TextStyle(
-              fontSize: 13.5,
-              height: 1.5,
-              color: textPrimary,
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          Row(
-            children: [
-              const Icon(
-                Icons.schedule_outlined,
-                size: 13,
-                color: textSecondary,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                _date(message.createAt),
-                style: const TextStyle(fontSize: 11, color: textSecondary),
-              ),
-            ],
-          ),
-        ],
+        trailing: const Icon(Icons.chevron_right_rounded),
       ),
     );
   }

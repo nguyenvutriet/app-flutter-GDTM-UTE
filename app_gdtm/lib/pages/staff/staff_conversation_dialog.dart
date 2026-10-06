@@ -1,11 +1,16 @@
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:app_gdtm/models/FileAttachment.dart';
 import 'package:app_gdtm/models/Request.dart';
+import 'package:app_gdtm/services/CloudinaryService.dart';
 import 'package:app_gdtm/services/conversation_chat_service.dart';
+import 'package:app_gdtm/widgets/attachment_utils.dart';
+import 'package:app_gdtm/widgets/pdf_viewer_page.dart';
 
 // Màu theo giao diện staff hiện có (staff_list_page.dart).
 const Color _blue = Color(0xFF005BAA);
@@ -59,8 +64,7 @@ class StaffConversationDialog extends StatefulWidget {
 }
 
 class _StaffConversationDialogState extends State<StaffConversationDialog> {
-  late final ConversationChatService _service =
-      widget.service ?? ConversationChatService();
+  late final ConversationChatService _service = widget.service ?? ConversationChatService();
 
   Stream<List<ConversationInfo>>? _stream;
 
@@ -93,11 +97,8 @@ class _StaffConversationDialogState extends State<StaffConversationDialog> {
     final insetH = media.size.width < 600 ? 16.0 : 40.0;
     const contentH = 20.0;
 
-    final width = math.max(
-      240.0,
-      math.min(650.0, media.size.width - insetH * 2 - contentH * 2),
-    );
-    // Trừ phần bàn phím + tiêu đề + nút "Đóng" để khung không bị tràn.
+    final width = math.max(240.0, math.min(650.0, media.size.width - insetH * 2 - contentH * 2));
+    // Trừ phần bàn phím và khoảng đệm hộp thoại để khung không bị tràn.
     final height = (media.size.height - media.viewInsets.bottom - 200)
         .clamp(200.0, 640.0)
         .toDouble();
@@ -105,20 +106,7 @@ class _StaffConversationDialogState extends State<StaffConversationDialog> {
     return AlertDialog(
       insetPadding: EdgeInsets.symmetric(horizontal: insetH, vertical: 16),
       contentPadding: const EdgeInsets.fromLTRB(contentH, 12, contentH, 8),
-      title: const Row(
-        children: [
-          Icon(Icons.forum_outlined, color: _blue),
-          SizedBox(width: 9),
-          Expanded(child: Text('Trao đổi với sinh viên')),
-        ],
-      ),
       content: SizedBox(width: width, height: height, child: _buildBody()),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Đóng'),
-        ),
-      ],
     );
   }
 
@@ -163,6 +151,16 @@ class _StaffConversationDialogState extends State<StaffConversationDialog> {
           orElse: () => conversations.first,
         );
 
+        if (_composing && widget.canOperate) {
+          return _OpenConversationForm(
+            service: _service,
+            request: widget.request,
+            staffUserId: widget.staffUserId,
+            onCancel: () => setState(() => _composing = false),
+            onOpened: () => setState(() => _composing = false),
+          );
+        }
+
         return Column(
           children: [
             if (conversations.length > 1) ...[
@@ -173,6 +171,15 @@ class _StaffConversationDialogState extends State<StaffConversationDialog> {
               ),
               const SizedBox(height: 8),
             ],
+            if (!selected.isOpen && widget.canOperate)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _composing = true),
+                  icon: const Icon(Icons.add_comment_outlined, size: 17),
+                  label: const Text('Mở hội thoại mới'),
+                ),
+              ),
             Expanded(
               child: _ConversationChat(
                 key: ValueKey(selected.docId),
@@ -241,7 +248,8 @@ class _EmptyState extends StatelessWidget {
           else
             const _InfoNotice(
               icon: Icons.lock_outline,
-              text: 'Phòng ban của bạn không còn quyền xử lý góp ý này '
+              text:
+                  'Phòng ban của bạn không còn quyền xử lý góp ý này '
                   'nên không thể mở hội thoại.',
             ),
         ],
@@ -374,9 +382,8 @@ class _OpenConversationFormState extends State<_OpenConversationForm> {
                 ),
               ],
               decoration: _decoration('Chủ đề'),
-              validator: (value) => (value ?? '').trim().isEmpty
-                  ? 'Vui lòng nhập chủ đề'
-                  : null,
+              validator: (value) =>
+                  (value ?? '').trim().isEmpty ? 'Vui lòng nhập chủ đề' : null,
             ),
             const SizedBox(height: 14),
             TextFormField(
@@ -515,9 +522,10 @@ class _ConversationChat extends StatefulWidget {
 class _ConversationChatState extends State<_ConversationChat> {
   final _inputCtrl = TextEditingController();
   final _inputFocus = FocusNode();
+  final _files = <PlatformFile>[];
 
-  late final Stream<List<ConversationMessage>> _messages =
-      widget.service.watchMessages(widget.conversation);
+  late final Stream<List<ConversationMessage>> _messages = widget.service
+      .watchMessages(widget.conversation);
 
   bool _sending = false;
   bool _closing = false;
@@ -553,10 +561,30 @@ class _ConversationChatState extends State<_ConversationChat> {
   // GỬI TIN NHẮN
   // ------------------------------------------------------------
 
+  Future<void> _pickFiles() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      withData: true,
+    );
+    if (result == null || !mounted) return;
+    final files = [..._files, ...result.files];
+    final error = CloudinaryService.validateFiles(files);
+    if (error != null) {
+      setState(() => _error = error);
+      return;
+    }
+    setState(() {
+      _files
+        ..clear()
+        ..addAll(files);
+      _error = null;
+    });
+  }
+
   Future<void> _send() async {
     if (_sending) return;
     final text = _inputCtrl.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty && _files.isEmpty) return;
 
     final receiverId = widget.request.userId ?? '';
     if (receiverId.isEmpty) {
@@ -571,12 +599,31 @@ class _ConversationChatState extends State<_ConversationChat> {
     _inputCtrl.clear();
 
     try {
+      final uploads = await CloudinaryService().uploadFiles(
+        _files,
+        folder: CloudinaryConfig.conversationFolder,
+        ownerId: widget.conversation.docId,
+      );
       await widget.service.sendMessage(
         conversation: widget.conversation,
         senderId: widget.staffUserId,
         receiverId: receiverId,
         content: text,
+        attachments: uploads
+            .map(
+              (file) => FileAttachment(
+                filename: file.fileName,
+                fileUrl: file.secureUrl,
+                filestype: file.fileType,
+                filesize: file.bytes,
+                publicId: file.publicId,
+                resourceType: file.resourceType,
+                deleteToken: file.deleteToken,
+              ),
+            )
+            .toList(),
       );
+      _files.clear();
     } on ConversationChatException catch (e) {
       if (!mounted) return;
       _restoreInput(text);
@@ -602,18 +649,14 @@ class _ConversationChatState extends State<_ConversationChat> {
     );
   }
 
-  // ------------------------------------------------------------
-  // ĐÓNG TRAO ĐỔI
-  // ------------------------------------------------------------
-
   Future<void> _confirmClose() async {
-    final ok = await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Đóng trao đổi?'),
+        title: const Text('Đóng hội thoại?'),
         content: const Text(
-          'Sau khi đóng, cả sinh viên và cán bộ chỉ có thể xem lại nội dung, '
-          'không thể nhắn tiếp. Thao tác này không thể hoàn tác.',
+          'Sau khi đóng, sinh viên và cán bộ chỉ có thể xem lại nội dung '
+          'và không thể nhắn tiếp.',
         ),
         actions: [
           TextButton(
@@ -623,26 +666,25 @@ class _ConversationChatState extends State<_ConversationChat> {
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
             style: FilledButton.styleFrom(backgroundColor: _red),
-            child: const Text('Đóng trao đổi'),
+            child: const Text('Đóng hội thoại'),
           ),
         ],
       ),
     );
-    if (ok != true || !mounted) return;
+    if (confirmed != true || !mounted) return;
 
     setState(() {
       _closing = true;
       _error = null;
     });
     try {
-      // Khung chat tự chuyển sang trạng thái "Đã đóng" nhờ stream thời gian thực.
       await widget.service.closeConversation(widget.conversation);
     } on ConversationChatException catch (e) {
-      if (!mounted) return;
-      setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.message);
     } catch (_) {
-      if (!mounted) return;
-      setState(() => _error = 'Không đóng được trao đổi, vui lòng thử lại.');
+      if (mounted) {
+        setState(() => _error = 'Không đóng được hội thoại, vui lòng thử lại.');
+      }
     } finally {
       if (mounted) setState(() => _closing = false);
     }
@@ -695,7 +737,8 @@ class _ConversationChatState extends State<_ConversationChat> {
         else if (!widget.canOperate)
           const _InfoNotice(
             icon: Icons.lock_outline,
-            text: 'Phòng ban của bạn không còn quyền xử lý góp ý này nên '
+            text:
+                'Phòng ban của bạn không còn quyền xử lý góp ý này nên '
                 'chỉ có thể xem trao đổi, không thể nhắn tiếp.',
           )
         else
@@ -704,7 +747,7 @@ class _ConversationChatState extends State<_ConversationChat> {
     );
   }
 
-  /// Tiêu đề cuộc trao đổi + "Trạng thái: Đang mở" + nút "Đóng trao đổi".
+  /// Tiêu đề và trạng thái cuộc trao đổi.
   Widget _buildHeader(bool isOpen) {
     final subject = widget.conversation.subject;
 
@@ -741,7 +784,6 @@ class _ConversationChatState extends State<_ConversationChat> {
       ],
     );
 
-    // Đã đóng, hoặc không có quyền thao tác: chỉ hiện thông tin, không có nút.
     if (!isOpen || !widget.canOperate) {
       return Align(alignment: Alignment.centerLeft, child: info);
     }
@@ -752,34 +794,28 @@ class _ConversationChatState extends State<_ConversationChat> {
         foregroundColor: _red,
         side: const BorderSide(color: _red),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        visualDensity: VisualDensity.compact,
+        minimumSize: const Size(0, 32),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       icon: _closing
           ? const SizedBox(
-              width: 16,
-              height: 16,
+              width: 14,
+              height: 14,
               child: CircularProgressIndicator(strokeWidth: 2, color: _red),
             )
-          : const Icon(Icons.check_circle_outline, size: 18),
-      label: const Text('Đóng trao đổi'),
+          : const Icon(Icons.check_circle_outline, size: 15),
+      label: Text('Đóng', style: const TextStyle(fontSize: 12)),
     );
 
-    return LayoutBuilder(
-      builder: (context, box) {
-        if (box.maxWidth < 420) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [info, const SizedBox(height: 8), closeButton],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: info),
-            const SizedBox(width: 12),
-            closeButton,
-          ],
-        );
-      },
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: info),
+        const SizedBox(width: 6),
+        closeButton,
+      ],
     );
   }
 
@@ -824,7 +860,8 @@ class _ConversationChatState extends State<_ConversationChat> {
   Widget _buildBubble(ConversationMessage message, double maxWidth) {
     final studentId = widget.request.userId ?? '';
     final mine = message.senderId == widget.staffUserId;
-    final isStudent = !mine && studentId.isNotEmpty && message.senderId == studentId;
+    final isStudent =
+        !mine && studentId.isNotEmpty && message.senderId == studentId;
 
     final String name;
     if (mine) {
@@ -869,6 +906,7 @@ class _ConversationChatState extends State<_ConversationChat> {
                   height: 1.35,
                 ),
               ),
+              ...message.attachments.map(_attachment),
               const SizedBox(height: 6),
               Text(
                 _formatTime(message.createAt),
@@ -876,6 +914,101 @@ class _ConversationChatState extends State<_ConversationChat> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _attachment(FileAttachment file) {
+    final url = file.fileUrl?.trim() ?? '';
+    final extension = attachmentExt(file);
+    final isImage = {
+      'jpg',
+      'jpeg',
+      'png',
+      'gif',
+      'webp',
+      'bmp',
+    }.contains(extension);
+
+    if (isImage && url.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: GestureDetector(
+          onTap: () => showDialog<void>(
+            context: context,
+            builder: (_) => Dialog(
+              child: InteractiveViewer(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('Không tải được hình ảnh.'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              url,
+              width: 260,
+              height: 180,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _fileLink(file),
+            ),
+          ),
+        ),
+      );
+    }
+    return _fileLink(file);
+  }
+
+  Widget _fileLink(FileAttachment file) {
+    final url = file.fileUrl?.trim() ?? '';
+    return InkWell(
+      onTap: url.isEmpty
+          ? null
+          : () {
+              if (isPdf(file)) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PdfViewerPage(
+                      url: url,
+                      title: file.filename ?? 'Tài liệu PDF',
+                    ),
+                  ),
+                );
+              } else {
+                openUrl(context, url);
+              }
+            },
+      child: Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              kindIcon(attachmentKind(file)),
+              size: 19,
+              color: kindColor(attachmentKind(file)),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                file.filename ?? 'Tệp đính kèm',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _blue,
+                  fontSize: 13,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -890,62 +1023,88 @@ class _ConversationChatState extends State<_ConversationChat> {
       );
     }
 
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: TextField(
-            controller: _inputCtrl,
-            focusNode: _inputFocus,
-            textInputAction: TextInputAction.send,
-            onSubmitted: (_) => _send(),
-            inputFormatters: [
-              LengthLimitingTextInputFormatter(
-                ConversationChatService.maxMessageLength,
-              ),
-            ],
-            decoration: InputDecoration(
-              hintText: 'Nhập tin nhắn...',
-              hintStyle: const TextStyle(color: _textSecondary),
-              isDense: true,
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 14,
-              ),
-              enabledBorder: border(_border),
-              focusedBorder: border(_blue, 1.6),
+        if (_files.isNotEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 6,
+              children: _files
+                  .map(
+                    (file) => Chip(
+                      label: Text(file.name, overflow: TextOverflow.ellipsis),
+                      onDeleted: _sending
+                          ? null
+                          : () => setState(() => _files.remove(file)),
+                    ),
+                  )
+                  .toList(),
             ),
           ),
-        ),
-        const SizedBox(width: 10),
-        Material(
-          color: _sending ? _blue.withValues(alpha: 0.6) : _blue,
-          borderRadius: BorderRadius.circular(12),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: _sending ? null : _send,
-            child: SizedBox(
-              width: 46,
-              height: 46,
-              child: Center(
-                child: _sending
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(
-                        Icons.send_rounded,
-                        color: Colors.white,
-                        size: 22,
-                      ),
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'Đính kèm tệp',
+              onPressed: _sending ? null : _pickFiles,
+              icon: const Icon(Icons.attach_file),
+            ),
+            Expanded(
+              child: TextField(
+                controller: _inputCtrl,
+                focusNode: _inputFocus,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _send(),
+                inputFormatters: [
+                  LengthLimitingTextInputFormatter(
+                    ConversationChatService.maxMessageLength,
+                  ),
+                ],
+                decoration: InputDecoration(
+                  hintText: 'Nhập tin nhắn...',
+                  hintStyle: const TextStyle(color: _textSecondary),
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                  enabledBorder: border(_border),
+                  focusedBorder: border(_blue, 1.6),
+                ),
               ),
             ),
-          ),
+            const SizedBox(width: 10),
+            Material(
+              color: _sending ? _blue.withValues(alpha: 0.6) : _blue,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: _sending ? null : _send,
+                child: SizedBox(
+                  width: 46,
+                  height: 46,
+                  child: Center(
+                    child: _sending
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.send_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -955,7 +1114,8 @@ class _ConversationChatState extends State<_ConversationChat> {
   Widget _buildClosedNotice() {
     return const _InfoNotice(
       icon: Icons.lock_outline,
-      text: 'Cuộc trao đổi đã được đóng. Bạn chỉ có thể xem lại nội dung, '
+      text:
+          'Cuộc trao đổi đã được đóng. Bạn chỉ có thể xem lại nội dung, '
           'không thể nhắn tiếp.',
     );
   }

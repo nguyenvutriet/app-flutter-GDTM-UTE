@@ -29,6 +29,8 @@ import 'package:app_gdtm/pages/student/department_announcements_page.dart';
 import 'package:app_gdtm/pages/staff/manage_notifications_page.dart';
 import 'package:app_gdtm/pages/staff/staff_dashboard_page.dart';
 import 'package:app_gdtm/pages/staff/staff_list_page.dart';
+import 'package:app_gdtm/pages/staff/feedback_detail_page.dart'
+    as staff_feedback;
 import 'package:app_gdtm/pages/common/change_password_page.dart';
 import 'package:app_gdtm/pages/admin/category_management_page.dart';
 import 'package:app_gdtm/services/comment_report_service.dart';
@@ -469,13 +471,30 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _openFeedbackFromNotification(Request request) {
+    if (widget.role == UserRole.staff) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => staff_feedback.FeedbackDetailPage(
+            request: request,
+            role: 'ROLE_TEACHER',
+            departmentId: widget.user.departmentId,
+            staffUserId: widget.user.id!,
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _selectedFeedback = request;
-      _feedbackDepartments = [];
-      _feedbackCategories = [];
       _feedbackBackId = 'notifications';
       _initialNotification = null;
       _selectedId = 'feedback_detail';
+      if (widget.role == UserRole.student) {
+        _feedbackDepartments = [];
+        _feedbackCategories = [];
+      }
     });
   }
 

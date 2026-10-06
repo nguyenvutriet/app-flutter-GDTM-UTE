@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:app_gdtm/models/FileAttachment.dart';
 
 // ============================================================
 // MODEL NHẸ DÙNG CHO HỘI THOẠI (viết mới, không đụng vào model cũ)
@@ -63,6 +64,7 @@ class ConversationMessage {
   final String senderId;
   final String receiverId;
   final DateTime? createAt;
+  final List<FileAttachment> attachments;
 
   const ConversationMessage({
     required this.id,
@@ -70,6 +72,7 @@ class ConversationMessage {
     required this.senderId,
     required this.receiverId,
     required this.createAt,
+    this.attachments = const [],
   });
 
   factory ConversationMessage.fromDoc(
@@ -82,6 +85,13 @@ class ConversationMessage {
       senderId: (data['senderId'] as String?) ?? '',
       receiverId: (data['receiverId'] as String?) ?? '',
       createAt: _toDate(data['createAt']),
+      attachments: (data['attachments'] as List?)
+              ?.whereType<Map>()
+              .map((item) => FileAttachment.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ))
+              .toList() ??
+          const [],
     );
   }
 }
@@ -226,16 +236,18 @@ class ConversationChatService {
     }
 
     try {
-      // Mỗi góp ý chỉ mở một cuộc trao đổi mới khi chưa có cuộc nào
-      // (tránh 2 cán bộ cùng bấm "Mở hội thoại").
+      // Chỉ chặn khi góp ý đang có một cuộc trao đổi mở. Các cuộc đã đóng
+      // được giữ lại để xem lịch sử và có thể mở cuộc mới.
       final existing = await _conversations
           .where('requestId', isEqualTo: requestId)
-          .limit(1)
           .get()
           .timeout(_timeout);
-      if (existing.docs.isNotEmpty) {
+      final hasOpenConversation = existing.docs.any(
+        (doc) => doc.data()['isOpen'] == true,
+      );
+      if (hasOpenConversation) {
         throw const ConversationChatException(
-          'Góp ý này đã có cuộc trao đổi. Hãy đóng và mở lại hộp thoại.',
+          'Góp ý này đang có một cuộc trao đổi mở.',
         );
       }
 
@@ -279,10 +291,13 @@ class ConversationChatService {
     required String senderId,
     required String receiverId,
     required String content,
+    List<FileAttachment> attachments = const [],
   }) async {
     final text = content.trim();
-    if (text.isEmpty) {
-      throw const ConversationChatException('Tin nhắn không được để trống.');
+    if (text.isEmpty && attachments.isEmpty) {
+      throw const ConversationChatException(
+        'Tin nhắn phải có nội dung hoặc tệp đính kèm.',
+      );
     }
     if (text.length > maxMessageLength) {
       throw const ConversationChatException(
@@ -311,6 +326,7 @@ class ConversationChatService {
           'senderId': senderId,
           'receiverId': receiverId,
           'createAt': Timestamp.now(),
+          'attachments': attachments.map((file) => file.toFirestore()).toList(),
         });
       }).timeout(_timeout);
     } on FirebaseException catch (e) {

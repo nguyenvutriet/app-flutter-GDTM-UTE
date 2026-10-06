@@ -11,7 +11,6 @@ import 'package:app_gdtm/models/Message.dart';
 import 'package:app_gdtm/services/RequestService.dart';
 import 'package:app_gdtm/pages/staff/staff_conversation_dialog.dart';
 
-
 class FeedbackDetailPage extends StatefulWidget {
   final Request request;
   final String role;
@@ -88,21 +87,17 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   ///
   /// => bị khóa.
   bool get _canOperateRequest {
-    final requestDepartmentId =
-        _request.departmentId?.trim();
+    final requestDepartmentId = _request.departmentId?.trim();
 
-    final staffDepartmentId =
-        widget.departmentId?.trim();
+    final staffDepartmentId = widget.departmentId?.trim();
 
     // Nếu chưa xác định được phòng ban của Staff
     // thì không cho thao tác để tránh thao tác nhầm.
-    if (staffDepartmentId == null ||
-        staffDepartmentId.isEmpty) {
+    if (staffDepartmentId == null || staffDepartmentId.isEmpty) {
       return false;
     }
 
-    if (requestDepartmentId == null ||
-        requestDepartmentId.isEmpty) {
+    if (requestDepartmentId == null || requestDepartmentId.isEmpty) {
       return false;
     }
 
@@ -155,10 +150,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
     } catch (e) {
       if (!mounted) return;
 
-      _showMessage(
-        'Không thể tải chi tiết góp ý: $e',
-        isError: true,
-      );
+      _showMessage('Không thể tải chi tiết góp ý: $e', isError: true);
     } finally {
       if (!mounted) return;
 
@@ -186,15 +178,12 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
           .get();
 
       if (direct.exists) {
-        final data =
-            direct.data() ?? <String, dynamic>{};
+        final data = direct.data() ?? <String, dynamic>{};
 
-        final name = (
-          data['fullName'] ??
-          data['fullname'] ??
-          data['name'] ??
-          ''
-        ).toString().trim();
+        final name =
+            (data['fullName'] ?? data['fullname'] ?? data['name'] ?? '')
+                .toString()
+                .trim();
 
         if (name.isNotEmpty) {
           _senderFullName = name;
@@ -204,22 +193,17 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
       final query = await FirebaseFirestore.instance
           .collection('users')
-          .where(
-            'id',
-            isEqualTo: userId,
-          )
+          .where('id', isEqualTo: userId)
           .limit(1)
           .get();
 
       if (query.docs.isNotEmpty) {
         final data = query.docs.first.data();
 
-        final name = (
-          data['fullName'] ??
-          data['fullname'] ??
-          data['name'] ??
-          ''
-        ).toString().trim();
+        final name =
+            (data['fullName'] ?? data['fullname'] ?? data['name'] ?? '')
+                .toString()
+                .trim();
 
         if (name.isNotEmpty) {
           _senderFullName = name;
@@ -227,9 +211,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
         }
       }
     } catch (e) {
-      debugPrint(
-        'LOAD SENDER ERROR: $e',
-      );
+      debugPrint('LOAD SENDER ERROR: $e');
     }
 
     return null;
@@ -250,26 +232,18 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
       for (final doc in snapshot.docs) {
         final data = doc.data();
 
-        final id = (
-          data['id'] ??
-          doc.id
-        ).toString().trim();
+        final id = (data['id'] ?? doc.id).toString().trim();
 
-        final name = (
-          data['subject'] ??
-          data['name'] ??
-          data['title'] ??
-          ''
-        ).toString().trim();
+        final name = (data['subject'] ?? data['name'] ?? data['title'] ?? '')
+            .toString()
+            .trim();
 
         if (id.isNotEmpty && name.isNotEmpty) {
           _categoryNamesById[id] = name;
         }
       }
     } catch (e) {
-      debugPrint(
-        'LOAD CATEGORY ERROR: $e',
-      );
+      debugPrint('LOAD CATEGORY ERROR: $e');
     }
   }
 
@@ -279,9 +253,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
   Future<void> _loadDepartments() async {
     try {
-      debugPrint(
-        '========== LOAD DEPARTMENTS ==========',
-      );
+      debugPrint('========== LOAD DEPARTMENTS ==========');
 
       debugPrint(
         'widget.departments.length = '
@@ -294,16 +266,9 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
       if (widget.departments.isNotEmpty) {
         _forwardDepartments = widget.departments
-            .where(
-              (d) =>
-                  d.id != null &&
-                  d.id!.trim().isNotEmpty,
-            )
+            .where((d) => d.id != null && d.id!.trim().isNotEmpty)
             .map(
-              (d) => _DepartmentOption(
-                d.id!.trim(),
-                (d.name ?? d.id!).trim(),
-              ),
+              (d) => _DepartmentOption(d.id!.trim(), (d.name ?? d.id!).trim()),
             )
             .toList();
 
@@ -312,8 +277,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
           '${_forwardDepartments.length}',
         );
 
-        for (final department
-            in _forwardDepartments) {
+        for (final department in _forwardDepartments) {
           debugPrint(
             'DEPARTMENT: '
             '${department.id} - '
@@ -321,9 +285,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
           );
         }
 
-        debugPrint(
-          '======================================',
-        );
+        debugPrint('======================================');
 
         return;
       }
@@ -355,33 +317,19 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
       for (final doc in snapshot.docs) {
         final data = doc.data();
 
-        debugPrint(
-          'DOCUMENT ID = ${doc.id}',
-        );
+        debugPrint('DOCUMENT ID = ${doc.id}');
 
-        debugPrint(
-          'DATA = $data',
-        );
+        debugPrint('DATA = $data');
 
-        final id = (
-          data['id'] ??
-          doc.id
-        ).toString().trim();
+        final id = (data['id'] ?? doc.id).toString().trim();
 
-        final name = (
-          data['name'] ??
-          data['departmentName'] ??
-          data['title'] ??
-          id
-        ).toString().trim();
+        final name =
+            (data['name'] ?? data['departmentName'] ?? data['title'] ?? id)
+                .toString()
+                .trim();
 
         if (id.isNotEmpty) {
-          result.add(
-            _DepartmentOption(
-              id,
-              name.isEmpty ? id : name,
-            ),
-          );
+          result.add(_DepartmentOption(id, name.isEmpty ? id : name));
         }
       }
 
@@ -392,8 +340,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
         '${_forwardDepartments.length}',
       );
 
-      for (final department
-          in _forwardDepartments) {
+      for (final department in _forwardDepartments) {
         debugPrint(
           'FINAL: '
           '${department.id} - '
@@ -401,17 +348,11 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
         );
       }
 
-      debugPrint(
-        '======================================',
-      );
+      debugPrint('======================================');
     } catch (e, stackTrace) {
-      debugPrint(
-        '❌ LOAD DEPARTMENTS ERROR: $e',
-      );
+      debugPrint('❌ LOAD DEPARTMENTS ERROR: $e');
 
-      debugPrint(
-        stackTrace.toString(),
-      );
+      debugPrint(stackTrace.toString());
 
       _forwardDepartments = [];
     }
@@ -434,9 +375,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
     final newStatus = _selectedStatus;
 
     if (newStatus == null || newStatus.isEmpty) {
-      _showMessage(
-        'Vui lòng chọn trạng thái mới.',
-      );
+      _showMessage('Vui lòng chọn trạng thái mới.');
 
       return;
     }
@@ -444,18 +383,13 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
     final requestId = _request.id;
 
     if (requestId == null || requestId.isEmpty) {
-      _showMessage(
-        'Góp ý không hợp lệ.',
-        isError: true,
-      );
+      _showMessage('Góp ý không hợp lệ.', isError: true);
 
       return;
     }
 
     if (newStatus == _request.currentStatus) {
-      _showMessage(
-        'Trạng thái mới giống trạng thái hiện tại.',
-      );
+      _showMessage('Trạng thái mới giống trạng thái hiện tại.');
 
       return;
     }
@@ -474,10 +408,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
       if (!mounted) return;
 
       setState(() {
-        _request = _copyRequestWithStatus(
-          _request,
-          newStatus,
-        );
+        _request = _copyRequestWithStatus(_request, newStatus);
 
         _selectedStatus = null;
       });
@@ -493,10 +424,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
     } catch (e) {
       if (!mounted) return;
 
-      _showMessage(
-        'Không thể cập nhật trạng thái: $e',
-        isError: true,
-      );
+      _showMessage('Không thể cập nhật trạng thái: $e', isError: true);
     } finally {
       if (!mounted) return;
 
@@ -523,28 +451,20 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
     final requestId = _request.id;
 
     if (requestId == null || requestId.isEmpty) {
-      _showMessage(
-        'Góp ý không hợp lệ.',
-        isError: true,
-      );
+      _showMessage('Góp ý không hợp lệ.', isError: true);
 
       return;
     }
 
-    final toDepartmentId =
-        _selectedDepartmentId;
+    final toDepartmentId = _selectedDepartmentId;
 
-    if (toDepartmentId == null ||
-        toDepartmentId.isEmpty) {
-      _showMessage(
-        'Vui lòng chọn phòng ban cần chuyển đến.',
-      );
+    if (toDepartmentId == null || toDepartmentId.isEmpty) {
+      _showMessage('Vui lòng chọn phòng ban cần chuyển đến.');
 
       return;
     }
 
-    if (toDepartmentId ==
-        _request.departmentId) {
+    if (toDepartmentId == _request.departmentId) {
       _showMessage(
         'Không thể chuyển đến cùng phòng ban hiện tại.',
         isError: true,
@@ -576,10 +496,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
       // => _canOperateRequest sẽ tự động = false.
 
       setState(() {
-        _request = _copyRequestWithDepartment(
-          _request,
-          toDepartmentId,
-        );
+        _request = _copyRequestWithDepartment(_request, toDepartmentId);
 
         _selectedDepartmentId = null;
 
@@ -592,16 +509,11 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
       if (!mounted) return;
 
-      _showMessage(
-        'Đã chuyển góp ý sang phòng ban mới.',
-      );
+      _showMessage('Đã chuyển góp ý sang phòng ban mới.');
     } catch (e) {
       if (!mounted) return;
 
-      _showMessage(
-        'Không thể chuyển góp ý: $e',
-        isError: true,
-      );
+      _showMessage('Không thể chuyển góp ý: $e', isError: true);
     } finally {
       if (!mounted) return;
 
@@ -615,19 +527,11 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // COPY REQUEST
   // ============================================================
 
-  Request _copyRequestWithStatus(
-    Request request,
-    String status,
-  ) {
-    return request.copyWith(
-      currentStatus: status,
-    );
+  Request _copyRequestWithStatus(Request request, String status) {
+    return request.copyWith(currentStatus: status);
   }
 
-  Request _copyRequestWithDepartment(
-    Request request,
-    String departmentId,
-  ) {
+  Request _copyRequestWithDepartment(Request request, String departmentId) {
     return request.copyWith(
       departmentId: departmentId,
       currentStatus: 'PENDING',
@@ -638,17 +542,13 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // MESSAGE
   // ============================================================
 
-  void _showMessage(
-    String message, {
-    bool isError = false,
-  }) {
+  void _showMessage(String message, {bool isError = false}) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor:
-            isError ? Colors.red : null,
+        backgroundColor: isError ? Colors.red : null,
       ),
     );
   }
@@ -661,24 +561,18 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Chi tiết góp ý',
-        ),
+        title: const Text('Chi tiết góp ý'),
         centerTitle: true,
         actions: [
           IconButton(
             onPressed: _loadDetails,
-            icon: const Icon(
-              Icons.refresh,
-            ),
+            icon: const Icon(Icons.refresh),
             tooltip: 'Làm mới',
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _loadDetails,
               child: ListView(
@@ -725,15 +619,11 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               'Thông tin góp ý',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
 
             const SizedBox(height: 16),
@@ -741,8 +631,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
             _buildInfoRow(
               icon: Icons.subject,
               title: 'Tiêu đề',
-              value:
-                  request.subject ?? 'Không có',
+              value: request.subject ?? 'Không có',
             ),
 
             const SizedBox(height: 12),
@@ -750,19 +639,15 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
             _buildInfoRow(
               icon: Icons.description_outlined,
               title: 'Nội dung',
-              value:
-                  request.description ?? 'Không có',
+              value: request.description ?? 'Không có',
             ),
 
             if (request.location != null &&
-                request.location!
-                    .trim()
-                    .isNotEmpty) ...[
+                request.location!.trim().isNotEmpty) ...[
               const SizedBox(height: 12),
 
               _buildInfoRow(
-                icon:
-                    Icons.location_on_outlined,
+                icon: Icons.location_on_outlined,
                 title: 'Địa điểm',
                 value: request.location!,
               ),
@@ -773,8 +658,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
             _buildInfoRow(
               icon: Icons.access_time,
               title: 'Thời gian gửi',
-              value:
-                  _formatDate(request.timeCreate),
+              value: _formatDate(request.timeCreate),
             ),
 
             const SizedBox(height: 12),
@@ -794,37 +678,26 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
             _buildInfoRow(
               icon: Icons.category_outlined,
               title: 'Danh mục',
-              value:
-                  _categoryNames(request),
+              value: _categoryNames(request),
             ),
 
             const SizedBox(height: 12),
 
             Row(
-              crossAxisAlignment:
-                  CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Icon(
-                  Icons.flag_outlined,
-                  size: 22,
-                ),
+                const Icon(Icons.flag_outlined, size: 22),
 
                 const SizedBox(width: 12),
 
                 const Text(
                   'Trạng thái:',
-                  style: TextStyle(
-                    fontWeight:
-                        FontWeight.w600,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w600),
                 ),
 
                 const SizedBox(width: 8),
 
-                _buildStatusBadge(
-                  request.currentStatus ??
-                      'PENDING',
-                ),
+                _buildStatusBadge(request.currentStatus ?? 'PENDING'),
               ],
             ),
 
@@ -833,50 +706,36 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
             _buildInfoRow(
               icon: Icons.business_outlined,
               title: 'Phòng ban xử lý',
-              value: _departmentName(
-                request.departmentId,
-              ),
+              value: _departmentName(request.departmentId),
             ),
 
             // ==================================================
             // THÔNG BÁO KHÔNG CÒN QUYỀN
             // ==================================================
-
             if (!_canOperateRequest)
               Container(
                 width: double.infinity,
-                margin:
-                    const EdgeInsets.only(top: 14),
-                padding:
-                    const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(top: 14),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange
-                      .withValues(alpha: .10),
-                  borderRadius:
-                      BorderRadius.circular(10),
+                  color: Colors.orange.withValues(alpha: .10),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: Colors.orange
-                        .withValues(alpha: .30),
+                    color: Colors.orange.withValues(alpha: .30),
                   ),
                 ),
                 child: const Row(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.lock_outline,
-                      color: Colors.orange,
-                    ),
+                    Icon(Icons.lock_outline, color: Colors.orange),
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         'Góp ý này hiện thuộc phòng ban khác. '
                         'Bạn không còn quyền thao tác.',
                         style: TextStyle(
-                          color:
-                              Colors.orange,
-                          fontWeight:
-                              FontWeight.w600,
+                          color: Colors.orange,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -899,41 +758,28 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
     required String value,
   }) {
     return Row(
-      crossAxisAlignment:
-          CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(
-          icon,
-          size: 22,
-          color: Colors.grey.shade700,
-        ),
+        Icon(icon, size: 22, color: Colors.grey.shade700),
 
         const SizedBox(width: 12),
 
         Expanded(
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
                 style: TextStyle(
                   fontSize: 13,
-                  color:
-                      Colors.grey.shade600,
-                  fontWeight:
-                      FontWeight.w500,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
 
               const SizedBox(height: 3),
 
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 15,
-                ),
-              ),
+              Text(value, style: const TextStyle(fontSize: 15)),
             ],
           ),
         ),
@@ -946,31 +792,20 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // ============================================================
 
   Widget _buildStatusSection() {
-    final currentStatus =
-        _request.currentStatus ??
-            'PENDING';
+    final currentStatus = _request.currentStatus ?? 'PENDING';
 
-    final statuses =
-        _availableStatuses(
-      currentStatus,
-    );
+    final statuses = _availableStatuses(currentStatus);
 
     return Card(
       elevation: 2,
       child: Padding(
-        padding:
-            const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               'Cập nhật trạng thái',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight:
-                    FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
 
             const SizedBox(height: 8),
@@ -978,10 +813,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
             Text(
               'Trạng thái hiện tại: '
               '${_statusLabel(currentStatus)}',
-              style: TextStyle(
-                color:
-                    Colors.grey.shade700,
-              ),
+              style: TextStyle(color: Colors.grey.shade700),
             ),
 
             const SizedBox(height: 12),
@@ -989,52 +821,31 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
             // ==================================================
             // DROPDOWN
             // ==================================================
-
             DropdownButtonFormField<String>(
               value: _selectedStatus,
 
-              decoration:
-                  InputDecoration(
-                labelText:
-                    'Trạng thái mới',
-                border:
-                    const OutlineInputBorder(),
-                enabled:
-                    _canOperateRequest &&
-                    !_isUpdatingStatus,
-                prefixIcon:
-                    const Icon(
-                  Icons.flag_outlined,
-                ),
+              decoration: InputDecoration(
+                labelText: 'Trạng thái mới',
+                border: const OutlineInputBorder(),
+                enabled: _canOperateRequest && !_isUpdatingStatus,
+                prefixIcon: const Icon(Icons.flag_outlined),
               ),
 
-              items: statuses
-                  .map(
-                    (status) {
-                      return DropdownMenuItem<
-                          String>(
-                        value: status,
-                        child: Text(
-                          _statusLabel(
-                            status,
-                          ),
-                        ),
-                      );
-                    },
-                  )
-                  .toList(),
+              items: statuses.map((status) {
+                return DropdownMenuItem<String>(
+                  value: status,
+                  child: Text(_statusLabel(status)),
+                );
+              }).toList(),
 
               onChanged:
-                  (!_canOperateRequest ||
-                          _isUpdatingStatus ||
-                          statuses.isEmpty)
-                      ? null
-                      : (value) {
-                          setState(() {
-                            _selectedStatus =
-                                value;
-                          });
-                        },
+                  (!_canOperateRequest || _isUpdatingStatus || statuses.isEmpty)
+                  ? null
+                  : (value) {
+                      setState(() {
+                        _selectedStatus = value;
+                      });
+                    },
             ),
 
             const SizedBox(height: 12),
@@ -1042,40 +853,34 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
             // ==================================================
             // UPDATE BUTTON
             // ==================================================
-
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed:
                     (!_canOperateRequest ||
-                            _isUpdatingStatus ||
-                            statuses.isEmpty)
-                        ? null
-                        : _updateStatus,
+                        _isUpdatingStatus ||
+                        statuses.isEmpty)
+                    ? null
+                    : _updateStatus,
 
                 icon: _isUpdatingStatus
                     ? const SizedBox(
                         width: 18,
                         height: 18,
-                        child:
-                            CircularProgressIndicator(
-                          strokeWidth: 2,
-                        ),
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : Icon(
-                        _canOperateRequest
-                            ? Icons.save
-                            : Icons.lock_outline,
+                        _canOperateRequest ? Icons.save : Icons.lock_outline,
                       ),
 
                 label: Text(
                   !_canOperateRequest
                       ? 'Không có quyền thao tác'
                       : statuses.isEmpty
-                          ? 'Không có trạng thái để cập nhật'
-                          : _isUpdatingStatus
-                              ? 'Đang cập nhật...'
-                              : 'Cập nhật trạng thái',
+                      ? 'Không có trạng thái để cập nhật'
+                      : _isUpdatingStatus
+                      ? 'Đang cập nhật...'
+                      : 'Cập nhật trạng thái',
                 ),
               ),
             ),
@@ -1089,21 +894,13 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // AVAILABLE STATUS
   // ============================================================
 
-  List<String> _availableStatuses(
-    String currentStatus,
-  ) {
+  List<String> _availableStatuses(String currentStatus) {
     switch (currentStatus) {
       case 'PENDING':
-        return [
-          'APPROVED',
-          'REJECTED',
-        ];
+        return ['APPROVED', 'REJECTED'];
 
       case 'APPROVED':
-        return [
-          'RESOLVED',
-          'REJECTED',
-        ];
+        return ['RESOLVED', 'REJECTED'];
 
       case 'RESOLVED':
       case 'REJECTED':
@@ -1120,25 +917,18 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // ============================================================
 
   Widget _buildAttachmentsSection() {
-    final attachments =
-        _details.attachments;
+    final attachments = _details.attachments;
 
     return Card(
       elevation: 2,
       child: Padding(
-        padding:
-            const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               'File đính kèm',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight:
-                    FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
 
             const SizedBox(height: 12),
@@ -1146,63 +936,36 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
             if (attachments.isEmpty)
               Text(
                 'Không có file đính kèm.',
-                style: TextStyle(
-                  color:
-                      Colors.grey.shade600,
-                ),
+                style: TextStyle(color: Colors.grey.shade600),
               )
             else
-              ...attachments.map(
-                _buildAttachmentItem,
-              ),
+              ...attachments.map(_buildAttachmentItem),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildAttachmentItem(
-    FileAttachment attachment,
-  ) {
+  Widget _buildAttachmentItem(FileAttachment attachment) {
     return Card(
-      margin:
-          const EdgeInsets.only(
-        bottom: 8,
-      ),
+      margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        onTap: () =>
-            _openAttachment(
-          attachment,
-        ),
+        onTap: () => _openAttachment(attachment),
 
-        leading: const Icon(
-          Icons.attach_file,
-        ),
+        leading: const Icon(Icons.attach_file),
 
         title: Text(
-          attachment.filename ??
-              'File',
+          attachment.filename ?? 'File',
           maxLines: 2,
-          overflow:
-              TextOverflow.ellipsis,
+          overflow: TextOverflow.ellipsis,
         ),
 
-        subtitle: Text(
-          _formatFileSize(
-            attachment.filesize,
-          ),
-        ),
+        subtitle: Text(_formatFileSize(attachment.filesize)),
 
-        trailing:
-            IconButton(
-          icon: const Icon(
-            Icons.open_in_new,
-          ),
+        trailing: IconButton(
+          icon: const Icon(Icons.open_in_new),
           tooltip: 'Mở file',
-          onPressed: () =>
-              _openAttachment(
-            attachment,
-          ),
+          onPressed: () => _openAttachment(attachment),
         ),
       ),
     );
@@ -1213,47 +976,36 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // ============================================================
 
   Widget _buildHistorySection() {
-    final histories =
-        List<RequestStatusHistory>.from(
-      _details.histories,
-    )..sort(
-        (a, b) {
-          final aTime = a.createAt;
-          final bTime = b.createAt;
+    final histories = List<RequestStatusHistory>.from(_details.histories)
+      ..sort((a, b) {
+        final aTime = a.createAt;
+        final bTime = b.createAt;
 
-          if (aTime == null &&
-              bTime == null) {
-            return 0;
-          }
+        if (aTime == null && bTime == null) {
+          return 0;
+        }
 
-          if (aTime == null) {
-            return 1;
-          }
+        if (aTime == null) {
+          return 1;
+        }
 
-          if (bTime == null) {
-            return -1;
-          }
+        if (bTime == null) {
+          return -1;
+        }
 
-          return aTime.compareTo(bTime);
-        },
-      );
+        return aTime.compareTo(bTime);
+      });
 
     return Card(
       elevation: 2,
       child: Padding(
-        padding:
-            const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               'Lịch sử xử lý',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight:
-                    FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
 
             const SizedBox(height: 16),
@@ -1261,32 +1013,19 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
             if (histories.isEmpty)
               Text(
                 'Chưa có lịch sử xử lý.',
-                style: TextStyle(
-                  color:
-                      Colors.grey.shade600,
-                ),
+                style: TextStyle(color: Colors.grey.shade600),
               )
             else
-              ...histories
-                  .asMap()
-                  .entries
-                  .map(
-                (entry) {
-                  final index =
-                      entry.key;
+              ...histories.asMap().entries.map((entry) {
+                final index = entry.key;
 
-                  final history =
-                      entry.value;
+                final history = entry.value;
 
-                  return _buildHistoryItem(
-                    history,
-                    isLast:
-                        index ==
-                            histories.length -
-                                1,
-                  );
-                },
-              ),
+                return _buildHistoryItem(
+                  history,
+                  isLast: index == histories.length - 1,
+                );
+              }),
           ],
         ),
       ),
@@ -1297,16 +1036,13 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
     RequestStatusHistory history, {
     required bool isLast,
   }) {
-    final status =
-        history.status ?? 'UNKNOWN';
+    final status = history.status ?? 'UNKNOWN';
 
-    final color =
-        _statusColor(status);
+    final color = _statusColor(status);
 
     return IntrinsicHeight(
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 38,
@@ -1315,37 +1051,19 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                 Container(
                   width: 32,
                   height: 32,
-                  decoration:
-                      BoxDecoration(
-                    color: color.withValues(
-                      alpha: .10,
-                    ),
-                    shape:
-                        BoxShape.circle,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: .10),
+                    shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    _statusIcon(
-                      status,
-                    ),
-                    color: color,
-                    size: 17,
-                  ),
+                  child: Icon(_statusIcon(status), color: color, size: 17),
                 ),
 
                 if (!isLast)
                   Expanded(
-                    child:
-                        Container(
+                    child: Container(
                       width: 2,
-                      margin:
-                          const EdgeInsets
-                              .symmetric(
-                        vertical: 5,
-                      ),
-                      color:
-                          color.withValues(
-                        alpha: .20,
-                      ),
+                      margin: const EdgeInsets.symmetric(vertical: 5),
+                      color: color.withValues(alpha: .20),
                     ),
                   ),
               ],
@@ -1356,76 +1074,42 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
           Expanded(
             child: Container(
-              margin:
-                  const EdgeInsets.only(
-                bottom: 12,
-              ),
-              padding:
-                  const EdgeInsets.all(
-                13,
-              ),
-              decoration:
-                  BoxDecoration(
-                color:
-                    const Color(
-                  0xFFF8FAFC,
-                ),
-                borderRadius:
-                    BorderRadius.circular(
-                  10,
-                ),
-                border: Border.all(
-                  color:
-                      const Color(
-                    0xFFE8EEF5,
-                  ),
-                ),
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE8EEF5)),
               ),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _statusLabel(
-                      status,
-                    ),
+                    _statusLabel(status),
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight:
-                          FontWeight.w700,
+                      fontWeight: FontWeight.w700,
                       color: color,
                     ),
                   ),
 
-                  const SizedBox(
-                    height: 5,
-                  ),
+                  const SizedBox(height: 5),
 
                   Row(
                     children: [
                       const Icon(
-                        Icons
-                            .schedule_outlined,
+                        Icons.schedule_outlined,
                         size: 13,
-                        color:
-                            Colors.grey,
+                        color: Colors.grey,
                       ),
 
-                      const SizedBox(
-                        width: 4,
-                      ),
+                      const SizedBox(width: 4),
 
                       Text(
-                        _formatDate(
-                          history
-                              .createAt,
-                        ),
-                        style:
-                            TextStyle(
+                        _formatDate(history.createAt),
+                        style: TextStyle(
                           fontSize: 11.5,
-                          color: Colors
-                              .grey
-                              .shade600,
+                          color: Colors.grey.shade600,
                         ),
                       ),
                     ],
@@ -1446,6 +1130,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   Future<void> _openMessages() async {
     await showDialog<void>(
       context: context,
+      barrierDismissible: true,
       builder: (_) => StaffConversationDialog(
         request: _request,
         staffUserId: widget.staffUserId,
@@ -1458,31 +1143,22 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   }
 
   Widget _buildConversationSection() {
-    final conversations =
-        _details.conversations;
+    final conversations = _details.conversations;
 
     return Card(
       elevation: 2,
       child: Padding(
-        padding:
-            const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Row(
               children: [
-                Icon(
-                  Icons.forum_outlined,
-                ),
+                Icon(Icons.forum_outlined),
                 SizedBox(width: 8),
                 Text(
                   'Trao đổi',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight:
-                        FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -1493,28 +1169,18 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
               conversations.isEmpty
                   ? 'Chưa có cuộc trao đổi nào.'
                   : 'Có ${conversations.length} '
-                      'cuộc trao đổi.',
-              style: TextStyle(
-                color:
-                    Colors.grey.shade700,
-              ),
+                        'cuộc trao đổi.',
+              style: TextStyle(color: Colors.grey.shade700),
             ),
 
             const SizedBox(height: 12),
 
             SizedBox(
               width: double.infinity,
-              child:
-                  OutlinedButton.icon(
-                onPressed:
-                    _openMessages,
-                icon: const Icon(
-                  Icons
-                      .visibility_outlined,
-                ),
-                label: const Text(
-                  'Xem trao đổi',
-                ),
+              child: OutlinedButton.icon(
+                onPressed: _openMessages,
+                icon: const Icon(Icons.forum_outlined),
+                label: const Text('Mở hộp thoại chat'),
               ),
             ),
           ],
@@ -1523,92 +1189,50 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
     );
   }
 
-  Widget _buildConversationItem(
-    ClarificationConversation
-        conversation,
-  ) {
-    final messages =
-        conversation.messages ?? [];
+  Widget _buildConversationItem(ClarificationConversation conversation) {
+    final messages = conversation.messages ?? [];
 
     return ExpansionTile(
-      tilePadding:
-          EdgeInsets.zero,
+      tilePadding: EdgeInsets.zero,
 
       title: Text(
-        conversation.subject ??
-            'Trao đổi',
-        style:
-            const TextStyle(
-          fontWeight:
-              FontWeight.w600,
-        ),
+        conversation.subject ?? 'Trao đổi',
+        style: const TextStyle(fontWeight: FontWeight.w600),
       ),
 
-      subtitle: Text(
-        conversation.isOpen == true
-            ? 'Đang mở'
-            : 'Đã đóng',
-      ),
+      subtitle: Text(conversation.isOpen == true ? 'Đang mở' : 'Đã đóng'),
 
       children: [
         if (messages.isEmpty)
           const Padding(
-            padding:
-                EdgeInsets.all(12),
-            child: Text(
-              'Chưa có tin nhắn.',
-            ),
+            padding: EdgeInsets.all(12),
+            child: Text('Chưa có tin nhắn.'),
           )
         else
-          ...messages.map(
-            _buildMessageItem,
-          ),
+          ...messages.map(_buildMessageItem),
       ],
     );
   }
 
-  Widget _buildMessageItem(
-    Message message,
-  ) {
+  Widget _buildMessageItem(Message message) {
     return Container(
       width: double.infinity,
-      margin:
-          const EdgeInsets.only(
-        bottom: 8,
-      ),
-      padding:
-          const EdgeInsets.all(12),
-      decoration:
-          BoxDecoration(
-        color:
-            Colors.grey.shade100,
-        borderRadius:
-            BorderRadius.circular(8),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            message.content ?? '',
-            style:
-                const TextStyle(
-              fontSize: 14,
-            ),
-          ),
+          Text(message.content ?? '', style: const TextStyle(fontSize: 14)),
 
           const SizedBox(height: 6),
 
           Text(
-            _formatDate(
-              message.createAt,
-            ),
-            style:
-                TextStyle(
-              fontSize: 12,
-              color:
-                  Colors.grey.shade600,
-            ),
+            _formatDate(message.createAt),
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
         ],
       ),
@@ -1621,41 +1245,26 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
   Widget _buildForwardSection() {
     final canForward =
-        _request.currentStatus ==
-                'APPROVED' &&
-            _canOperateRequest;
+        _request.currentStatus == 'APPROVED' && _canOperateRequest;
 
-    final availableDepartments =
-        _forwardDepartments
-            .where(
-              (department) =>
-                  department.id !=
-                  _request.departmentId,
-            )
-            .toList();
+    final availableDepartments = _forwardDepartments
+        .where((department) => department.id != _request.departmentId)
+        .toList();
 
     return Card(
       elevation: 2,
       child: Padding(
-        padding:
-            const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Row(
               children: [
-                Icon(
-                  Icons.forward_outlined,
-                ),
+                Icon(Icons.forward_outlined),
                 SizedBox(width: 8),
                 Text(
                   'Chuyển phòng ban',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight:
-                        FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -1665,10 +1274,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
             Text(
               'Phòng ban hiện tại: '
               '${_departmentName(_request.departmentId)}',
-              style: TextStyle(
-                color:
-                    Colors.grey.shade700,
-              ),
+              style: TextStyle(color: Colors.grey.shade700),
             ),
 
             const SizedBox(height: 12),
@@ -1676,57 +1282,42 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
             // ==================================================
             // KHÔNG CÓ PHÒNG BAN
             // ==================================================
-
             if (availableDepartments.isEmpty)
               Text(
                 'Không có phòng ban khác để chuyển.',
-                style: TextStyle(
-                  color:
-                      Colors.grey.shade600,
-                ),
+                style: TextStyle(color: Colors.grey.shade600),
               )
-
             // ==================================================
             // CÓ PHÒNG BAN
             // ==================================================
-
             else
               SizedBox(
                 width: double.infinity,
-                child:
-                    ElevatedButton.icon(
-                  onPressed:
-                      (!canForward ||
-                              _isForwarding)
-                          ? null
-                          : _showForwardDialog,
+                child: ElevatedButton.icon(
+                  onPressed: (!canForward || _isForwarding)
+                      ? null
+                      : _showForwardDialog,
 
                   icon: _isForwarding
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child:
-                              CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : Icon(
                           _canOperateRequest
-                              ? Icons
-                                  .forward_outlined
-                              : Icons
-                                  .lock_outline,
+                              ? Icons.forward_outlined
+                              : Icons.lock_outline,
                         ),
 
                   label: Text(
                     !_canOperateRequest
                         ? 'Phòng ban này không còn quyền xử lý'
-                        : _request.currentStatus !=
-                                'APPROVED'
-                            ? 'Chỉ có thể chuyển khi đang xử lý'
-                            : _isForwarding
-                                ? 'Đang chuyển...'
-                                : 'Chuyển phòng ban',
+                        : _request.currentStatus != 'APPROVED'
+                        ? 'Chỉ có thể chuyển khi đang xử lý'
+                        : _isForwarding
+                        ? 'Đang chuyển...'
+                        : 'Chuyển phòng ban',
                   ),
                 ),
               ),
@@ -1750,122 +1341,71 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
       return;
     }
 
-    final available =
-        _forwardDepartments
-            .where(
-              (d) =>
-                  d.id !=
-                  _request.departmentId,
-            )
-            .toList();
+    final available = _forwardDepartments
+        .where((d) => d.id != _request.departmentId)
+        .toList();
 
     if (available.isEmpty) {
-      _showMessage(
-        'Chưa có phòng ban khác để chuyển tiếp.',
-        isError: true,
-      );
+      _showMessage('Chưa có phòng ban khác để chuyển tiếp.', isError: true);
 
       return;
     }
 
     String? selectedId;
 
-    final noteController =
-        TextEditingController();
+    final noteController = TextEditingController();
 
-    final result =
-        await showDialog<String>(
+    final result = await showDialog<String>(
       context: context,
-      builder:
-          (dialogContext) =>
-              StatefulBuilder(
-        builder:
-            (
-          context,
-          setDialogState,
-        ) =>
-                AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
           title: const Row(
             children: [
-              Icon(
-                Icons
-                    .forward_outlined,
-              ),
+              Icon(Icons.forward_outlined),
               SizedBox(width: 8),
-              Text(
-                'Chuyển tiếp phản hồi',
-              ),
+              Text('Chuyển tiếp phản hồi'),
             ],
           ),
 
           content: SizedBox(
             width: 520,
             child: Column(
-              mainAxisSize:
-                  MainAxisSize.min,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                DropdownButtonFormField<
-                    String>(
+                DropdownButtonFormField<String>(
                   value: selectedId,
                   isExpanded: true,
 
-                  decoration:
-                      const InputDecoration(
-                    labelText:
-                        'Phòng ban nhận',
-                    border:
-                        OutlineInputBorder(),
-                    prefixIcon:
-                        Icon(
-                      Icons
-                          .business_outlined,
-                    ),
+                  decoration: const InputDecoration(
+                    labelText: 'Phòng ban nhận',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.business_outlined),
                   ),
 
-                  items: available
-                      .map(
-                        (department) {
-                          return DropdownMenuItem<
-                              String>(
-                            value:
-                                department.id,
-                            child: Text(
-                              department
-                                  .name,
-                            ),
-                          );
-                        },
-                      )
-                      .toList(),
-
-                  onChanged:
-                      (value) {
-                    setDialogState(
-                      () {
-                        selectedId =
-                            value;
-                      },
+                  items: available.map((department) {
+                    return DropdownMenuItem<String>(
+                      value: department.id,
+                      child: Text(department.name),
                     );
+                  }).toList(),
+
+                  onChanged: (value) {
+                    setDialogState(() {
+                      selectedId = value;
+                    });
                   },
                 ),
 
-                const SizedBox(
-                  height: 12,
-                ),
+                const SizedBox(height: 12),
 
                 TextField(
-                  controller:
-                      noteController,
+                  controller: noteController,
                   maxLines: 3,
 
-                  decoration:
-                      const InputDecoration(
-                    labelText:
-                        'Ghi chú chuyển',
-                    hintText:
-                        'Nhập ghi chú nếu cần...',
-                    border:
-                        OutlineInputBorder(),
+                  decoration: const InputDecoration(
+                    labelText: 'Ghi chú chuyển',
+                    hintText: 'Nhập ghi chú nếu cần...',
+                    border: OutlineInputBorder(),
                   ),
                 ),
               ],
@@ -1874,54 +1414,34 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
           actions: [
             TextButton(
-              onPressed: () =>
-                  Navigator.pop(
-                dialogContext,
-              ),
-              child:
-                  const Text(
-                'Hủy',
-              ),
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Hủy'),
             ),
 
             FilledButton.icon(
-              onPressed:
-                  selectedId == null
-                      ? null
-                      : () =>
-                          Navigator.pop(
-                        dialogContext,
-                        selectedId,
-                      ),
+              onPressed: selectedId == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, selectedId),
 
-              icon: const Icon(
-                Icons
-                    .forward_outlined,
-              ),
+              icon: const Icon(Icons.forward_outlined),
 
-              label:
-                  const Text(
-                'Chuyển tiếp',
-              ),
+              label: const Text('Chuyển tiếp'),
             ),
           ],
         ),
       ),
     );
 
-    final selectedNote =
-        noteController.text.trim();
+    final selectedNote = noteController.text.trim();
 
     noteController.dispose();
 
     if (result == null) return;
 
     setState(() {
-      _selectedDepartmentId =
-          result;
+      _selectedDepartmentId = result;
 
-      _forwardNoteController.text =
-          selectedNote;
+      _forwardNoteController.text = selectedNote;
     });
 
     await _forwardRequest();
@@ -1931,98 +1451,61 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // CATEGORY
   // ============================================================
 
-  String _categoryNames(
-    Request request,
-  ) {
+  String _categoryNames(Request request) {
     final names = <String>[];
 
-    for (final id
-        in request.categoryIds) {
-      final name =
-          _categoryNamesById[
-              id.trim()];
+    for (final id in request.categoryIds) {
+      final name = _categoryNamesById[id.trim()];
 
-      if (name != null &&
-          name.isNotEmpty &&
-          !names.contains(name)) {
+      if (name != null && name.isNotEmpty && !names.contains(name)) {
         names.add(name);
       }
     }
 
     if (names.isEmpty) {
-      for (final category
-          in request.categories) {
-        final name =
-            category.subject.trim();
+      for (final category in request.categories) {
+        final name = category.subject.trim();
 
-        if (name.isNotEmpty &&
-            !names.contains(name)) {
+        if (name.isNotEmpty && !names.contains(name)) {
           names.add(name);
         }
       }
     }
 
-    return names.isEmpty
-        ? 'Không có'
-        : names.join(', ');
+    return names.isEmpty ? 'Không có' : names.join(', ');
   }
 
   // ============================================================
   // OPEN ATTACHMENT
   // ============================================================
 
-  Future<void> _openAttachment(
-    FileAttachment attachment,
-  ) async {
-    final rawUrl =
-        attachment.fileUrl?.trim();
+  Future<void> _openAttachment(FileAttachment attachment) async {
+    final rawUrl = attachment.fileUrl?.trim();
 
-    if (rawUrl == null ||
-        rawUrl.isEmpty) {
-      _showMessage(
-        'Không tìm thấy đường dẫn file.',
-        isError: true,
-      );
+    if (rawUrl == null || rawUrl.isEmpty) {
+      _showMessage('Không tìm thấy đường dẫn file.', isError: true);
 
       return;
     }
 
-    final uri =
-        Uri.tryParse(rawUrl);
+    final uri = Uri.tryParse(rawUrl);
 
-    if (uri == null ||
-        !(uri.scheme == 'http' ||
-            uri.scheme == 'https')) {
-      _showMessage(
-        'Đường dẫn file không hợp lệ.',
-        isError: true,
-      );
+    if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
+      _showMessage('Đường dẫn file không hợp lệ.', isError: true);
 
       return;
     }
 
     try {
-      final opened =
-          await launchUrl(
-        uri,
-        mode:
-            LaunchMode
-                .externalApplication,
-      );
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
 
       if (!opened && mounted) {
-        _showMessage(
-          'Không thể mở file.',
-          isError: true,
-        );
+        _showMessage('Không thể mở file.', isError: true);
       }
     } catch (e) {
       if (!mounted) return;
 
-      _showMessage(
-        'Không thể mở file: $e',
-        isError: true,
-      );
+      _showMessage('Không thể mở file: $e', isError: true);
     }
   }
 
@@ -2030,26 +1513,17 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // DEPARTMENT NAME
   // ============================================================
 
-  String _departmentName(
-    String? departmentId,
-  ) {
-    if (departmentId == null ||
-        departmentId.trim().isEmpty) {
+  String _departmentName(String? departmentId) {
+    if (departmentId == null || departmentId.trim().isEmpty) {
       return 'Không xác định';
     }
 
-    final id =
-        departmentId.trim();
+    final id = departmentId.trim();
 
     // Tìm trong danh sách truyền từ widget
-    for (final department
-        in widget.departments) {
-      if (department.id?.trim() ==
-          id) {
-        final name =
-            department.name
-                    ?.trim() ??
-                '';
+    for (final department in widget.departments) {
+      if (department.id?.trim() == id) {
+        final name = department.name?.trim() ?? '';
 
         if (name.isNotEmpty) {
           return name;
@@ -2061,12 +1535,9 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
     // Tìm trong danh sách đã load
     // từ Firestore
-    for (final department
-        in _forwardDepartments) {
+    for (final department in _forwardDepartments) {
       if (department.id == id) {
-        if (department.name
-            .trim()
-            .isNotEmpty) {
+        if (department.name.trim().isNotEmpty) {
           return department.name;
         }
 
@@ -2081,29 +1552,15 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // STATUS BADGE
   // ============================================================
 
-  Widget _buildStatusBadge(
-    String status,
-  ) {
-    final color =
-        _statusColor(status);
+  Widget _buildStatusBadge(String status) {
+    final color = _statusColor(status);
 
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 6,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
 
-      decoration:
-          BoxDecoration(
-        color:
-            color.withValues(
-          alpha: .12,
-        ),
-        borderRadius:
-            BorderRadius.circular(
-          20,
-        ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(20),
       ),
 
       child: Text(
@@ -2111,8 +1568,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
         style: TextStyle(
           color: color,
           fontSize: 12,
-          fontWeight:
-              FontWeight.bold,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );
@@ -2122,33 +1578,25 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // STATUS ICON
   // ============================================================
 
-  IconData _statusIcon(
-    String status,
-  ) {
+  IconData _statusIcon(String status) {
     switch (status) {
       case 'PENDING':
-        return Icons
-            .schedule_outlined;
+        return Icons.schedule_outlined;
 
       case 'APPROVED':
-        return Icons
-            .autorenew_rounded;
+        return Icons.autorenew_rounded;
 
       case 'FORWARDING':
-        return Icons
-            .forward_outlined;
+        return Icons.forward_outlined;
 
       case 'RESOLVED':
-        return Icons
-            .check_circle_outline;
+        return Icons.check_circle_outline;
 
       case 'REJECTED':
-        return Icons
-            .cancel_outlined;
+        return Icons.cancel_outlined;
 
       default:
-        return Icons
-            .info_outline;
+        return Icons.info_outline;
     }
   }
 
@@ -2156,9 +1604,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // STATUS LABEL
   // ============================================================
 
-  String _statusLabel(
-    String status,
-  ) {
+  String _statusLabel(String status) {
     switch (status) {
       case 'PENDING':
         return 'Đang chờ tiếp nhận';
@@ -2184,9 +1630,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // STATUS COLOR
   // ============================================================
 
-  Color _statusColor(
-    String status,
-  ) {
+  Color _statusColor(String status) {
     switch (status) {
       case 'PENDING':
         return Colors.orange;
@@ -2212,41 +1656,22 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // DATE
   // ============================================================
 
-  String _formatDate(
-    DateTime? date,
-  ) {
+  String _formatDate(DateTime? date) {
     if (date == null) {
       return 'Không rõ thời gian';
     }
 
     final value = date.toLocal();
 
-    final day =
-        value.day.toString().padLeft(
-              2,
-              '0',
-            );
+    final day = value.day.toString().padLeft(2, '0');
 
-    final month =
-        value.month.toString().padLeft(
-              2,
-              '0',
-            );
+    final month = value.month.toString().padLeft(2, '0');
 
-    final year =
-        value.year.toString();
+    final year = value.year.toString();
 
-    final hour =
-        value.hour.toString().padLeft(
-              2,
-              '0',
-            );
+    final hour = value.hour.toString().padLeft(2, '0');
 
-    final minute =
-        value.minute.toString().padLeft(
-              2,
-              '0',
-            );
+    final minute = value.minute.toString().padLeft(2, '0');
 
     return '$day/$month/$year '
         '$hour:$minute';
@@ -2261,36 +1686,24 @@ class _DepartmentOption {
   final String id;
   final String name;
 
-  const _DepartmentOption(
-    this.id,
-    this.name,
-  );
+  const _DepartmentOption(this.id, this.name);
 }
 
 // ============================================================
 // CONVERSATION DIALOG
 // ============================================================
 
-class _ConversationDialog
-    extends StatelessWidget {
-  final List<
-      ClarificationConversation>
-      conversations;
+class _ConversationDialog extends StatelessWidget {
+  final List<ClarificationConversation> conversations;
 
-  const _ConversationDialog({
-    required this.conversations,
-  });
+  const _ConversationDialog({required this.conversations});
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return AlertDialog(
       title: const Row(
         children: [
-          Icon(
-            Icons.forum_outlined,
-          ),
+          Icon(Icons.forum_outlined),
           SizedBox(width: 8),
           Text('Trao đổi'),
         ],
@@ -2298,133 +1711,62 @@ class _ConversationDialog
 
       content: SizedBox(
         width: 650,
-        child: conversations
-                .isEmpty
+        child: conversations.isEmpty
             ? const Padding(
-                padding:
-                    EdgeInsets.symmetric(
-                  vertical: 20,
-                ),
-                child: Text(
-                  'Chưa có cuộc trao đổi nào.',
-                ),
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Text('Chưa có cuộc trao đổi nào.'),
               )
             : ListView.separated(
                 shrinkWrap: true,
-                itemCount:
-                    conversations.length,
+                itemCount: conversations.length,
 
-                separatorBuilder:
-                    (_, __) =>
-                        const SizedBox(
-                  height: 8,
-                ),
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
 
-                itemBuilder:
-                    (
-                  context,
-                  index,
-                ) {
-                  final conversation =
-                      conversations[
-                          index];
+                itemBuilder: (context, index) {
+                  final conversation = conversations[index];
 
-                  final messages =
-                      conversation
-                              .messages ??
-                          [];
+                  final messages = conversation.messages ?? [];
 
                   return Card(
-                    margin:
-                        EdgeInsets.zero,
+                    margin: EdgeInsets.zero,
 
-                    child:
-                        ExpansionTile(
-                      leading:
-                          Icon(
-                        conversation
-                                .isOpen ==
-                            true
-                            ? Icons
-                                .lock_open_rounded
-                            : Icons
-                                .lock_outline_rounded,
-                        color:
-                            conversation
-                                    .isOpen ==
-                                true
-                                ? Colors
-                                    .green
-                                : Colors
-                                    .grey,
+                    child: ExpansionTile(
+                      leading: Icon(
+                        conversation.isOpen == true
+                            ? Icons.lock_open_rounded
+                            : Icons.lock_outline_rounded,
+                        color: conversation.isOpen == true
+                            ? Colors.green
+                            : Colors.grey,
                       ),
 
                       title: Text(
-                        conversation
-                                .subject ??
-                            'Cuộc trao đổi',
-                        style:
-                            const TextStyle(
-                          fontWeight:
-                              FontWeight
-                                  .w600,
-                        ),
+                        conversation.subject ?? 'Cuộc trao đổi',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
 
-                      subtitle:
-                          Text(
-                        conversation
-                                .isOpen ==
-                            true
-                            ? 'Đang mở'
-                            : 'Đã đóng',
+                      subtitle: Text(
+                        conversation.isOpen == true ? 'Đang mở' : 'Đã đóng',
                       ),
 
-                      children:
-                          messages
-                                  .isEmpty
-                              ? const [
-                                  Padding(
-                                    padding:
-                                        EdgeInsets.all(
-                                      16,
-                                    ),
-                                    child:
-                                        Text(
-                                      'Chưa có tin nhắn.',
-                                    ),
-                                  ),
-                                ]
-                              : messages
-                                  .map(
-                                  (
-                                    message,
-                                  ) {
-                                    return ListTile(
-                                      leading:
-                                          const Icon(
-                                        Icons
-                                            .message_outlined,
-                                      ),
+                      children: messages.isEmpty
+                          ? const [
+                              Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Text('Chưa có tin nhắn.'),
+                              ),
+                            ]
+                          : messages.map((message) {
+                              return ListTile(
+                                leading: const Icon(Icons.message_outlined),
 
-                                      title:
-                                          Text(
-                                        message
-                                                .content ??
-                                            '',
-                                      ),
+                                title: Text(message.content ?? ''),
 
-                                      subtitle:
-                                          Text(
-                                        _formatDateStatic(
-                                          message
-                                              .createAt,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                )
-                                  .toList(),
+                                subtitle: Text(
+                                  _formatDateStatic(message.createAt),
+                                ),
+                              );
+                            }).toList(),
                     ),
                   );
                 },
@@ -2433,32 +1775,21 @@ class _ConversationDialog
 
       actions: [
         TextButton(
-          onPressed: () =>
-              Navigator.pop(
-            context,
-          ),
-          child:
-              const Text('Đóng'),
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Đóng'),
         ),
       ],
     );
   }
 
-  static String _formatDateStatic(
-    DateTime? date,
-  ) {
+  static String _formatDateStatic(DateTime? date) {
     if (date == null) {
       return 'Chưa cập nhật';
     }
 
-    final value =
-        date.toLocal();
+    final value = date.toLocal();
 
-    String two(int n) =>
-        n.toString().padLeft(
-              2,
-              '0',
-            );
+    String two(int n) => n.toString().padLeft(2, '0');
 
     return '${two(value.day)}/'
         '${two(value.month)}/'
@@ -2472,11 +1803,8 @@ class _ConversationDialog
 // FILE SIZE
 // ============================================================
 
-String _formatFileSize(
-  int? bytes,
-) {
-  if (bytes == null ||
-      bytes <= 0) {
+String _formatFileSize(int? bytes) {
+  if (bytes == null || bytes <= 0) {
     return 'Không rõ dung lượng';
   }
 
@@ -2488,12 +1816,9 @@ String _formatFileSize(
     return '${(bytes / 1024).toStringAsFixed(1)} KB';
   }
 
-  if (bytes <
-      1024 * 1024 * 1024) {
+  if (bytes < 1024 * 1024 * 1024) {
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
-
 }
-
