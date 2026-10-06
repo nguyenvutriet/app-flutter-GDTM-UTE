@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'package:flutter/material.dart';
-import 'feedback_detail_page.dart';
-import '../../models/Category.dart';
 
 import '../../models/ClarificationConversation.dart';
 
@@ -14,7 +13,6 @@ import '../../models/Request.dart';
 import '../../models/RequestStatusHistory.dart';
 
 import '../../services/RequestService.dart';
-import '../../services/CategoryService.dart';
 
 class StaffListPage extends StatefulWidget {
 
@@ -61,7 +59,6 @@ class _StaffListPageState extends State<StaffListPage> {
   static const Color borderColor = Color(0xFFE3EAF2);
 
   final RequestService _service = RequestService();
-  final CategoryService _categoryService = CategoryService();
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -74,9 +71,9 @@ class _StaffListPageState extends State<StaffListPage> {
   List<Request> _filteredRequests = [];
 
   String _selectedStatus = 'ALL';
+  String _selectedSort = 'ASC';
 
   String _selectedCategory = 'ALL';
-  List<Category> _categories = [];
   final Map<String, String> _categoryNamesById = {};
 
   int _currentPage = 0;
@@ -146,16 +143,21 @@ class _StaffListPageState extends State<StaffListPage> {
           role: widget.role,
           departmentId: widget.departmentId,
         ),
-        _categoryService.getActiveCategories(),
+        FirebaseFirestore.instance.collection('categories').get(),
       ]);
 
       final data = results[0] as List<Request>;
-      final categories = results[1] as List<Category>;
+      final categorySnapshot =
+          results[1] as QuerySnapshot<Map<String, dynamic>>;
 
       final categoryMap = <String, String>{};
-      for (final category in categories) {
-        final id = (category.id ?? '').trim();
-        final name = category.subject.trim();
+      for (final doc in categorySnapshot.docs) {
+        final value = doc.data();
+        final id = (value['id'] ?? doc.id).toString().trim();
+        final name =
+            (value['subject'] ?? value['name'] ?? value['title'] ?? '')
+                .toString()
+                .trim();
         if (id.isNotEmpty && name.isNotEmpty) {
           categoryMap[id] = name;
         }
@@ -164,7 +166,6 @@ class _StaffListPageState extends State<StaffListPage> {
       if (!mounted) return;
       setState(() {
         _allRequests = data;
-        _categories = categories;
         _categoryNamesById
           ..clear()
           ..addAll(categoryMap);
@@ -195,7 +196,12 @@ class _StaffListPageState extends State<StaffListPage> {
   }
 
   List<String> get _categoryOptions {
-    final result = _categoryNamesById.values
+    final names = <String>{};
+    for (final request in _allRequests) {
+      names.addAll(_requestCategoryNames(request));
+    }
+
+    final result = names
         .where((name) => name.trim().isNotEmpty)
         .map((name) => name.trim())
         .toSet()
@@ -268,6 +274,35 @@ class _StaffListPageState extends State<StaffListPage> {
     );
   }
 
+
+
+void _resetFilters() {
+  setState(() {
+    _searchController.clear();
+    _selectedStatus = 'ALL';
+    _selectedCategory = 'ALL';
+    _selectedSort = 'ASC';
+    _currentPage = 0;
+  });
+  _applyFilters();
+}
+
+
+void _sortRequests() {
+  _filteredRequests.sort((a, b) {
+    final aTime = a.timeCreate;
+    final bTime = b.timeCreate;
+
+    if (aTime == null && bTime == null) return 0;
+    if (aTime == null) return 1;
+    if (bTime == null) return -1;
+
+    final result = aTime.compareTo(bTime);
+    return _selectedSort == 'ASC' ? result : -result;
+  });
+}
+
+
 void _applyFilters() {
 
     final keyword = _searchController.text.trim().toLowerCase();
@@ -324,6 +359,19 @@ void _applyFilters() {
         return _requestCategoryNames(request).contains(_selectedCategory);
       }).toList();
     }
+
+
+    result.sort((a, b) {
+      final aTime = a.timeCreate;
+      final bTime = b.timeCreate;
+
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+
+      final compare = aTime.compareTo(bTime);
+      return _selectedSort == 'ASC' ? compare : -compare;
+    });
 
 if (!mounted) return;
 
@@ -678,40 +726,41 @@ Widget _buildSearchAndFilter() {
           const SizedBox(height: 14),
 
           // Bộ lọc trạng thái
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: _statuses.map((status) {
-                final selected = _selectedStatus == status;
-                final color =
-                    status == 'ALL' ? hcmuteBlue : _statusColor(status);
-
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    selected: selected,
-                    label: Text(
-                      status == 'ALL' ? 'Tất cả' : _statusLabel(status),
-                    ),
-                    selectedColor: color.withOpacity(.12),
-                    side: BorderSide(
-                      color: selected
-                          ? color.withOpacity(.35)
-                          : borderColor,
-                    ),
-                    labelStyle: TextStyle(
-                      color: selected ? color : textSecondary,
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                    onSelected: (_) {
-                      setState(() => _selectedStatus = status);
-                      _applyFilters();
-                    },
-                  ),
-                );
-              }).toList(),
+          DropdownButtonFormField<String>(
+            value: _selectedStatus,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: 'Trạng thái',
+              prefixIcon: const Icon(Icons.filter_alt_outlined),
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(11),
+                borderSide: const BorderSide(color: borderColor),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(11),
+                borderSide: const BorderSide(color: borderColor),
+              ),
             ),
+            items: _statuses.map((status) {
+              return DropdownMenuItem<String>(
+                value: status,
+                child: Text(
+                  status == 'ALL' ? 'Tất cả trạng thái' : _statusLabel(status),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => _selectedStatus = value);
+              _applyFilters();
+            },
           ),
 
           const SizedBox(height: 12),
@@ -753,6 +802,50 @@ Widget _buildSearchAndFilter() {
               _applyFilters();
             },
           ),
+
+          const SizedBox(height: 12),
+
+          DropdownButtonFormField<String>(
+            value: _selectedSort,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: 'Sắp xếp theo thời gian',
+              prefixIcon: const Icon(Icons.schedule_outlined),
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(11),
+                borderSide: const BorderSide(color: borderColor),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(11),
+                borderSide: const BorderSide(color: borderColor),
+              ),
+            ),
+            items: const [
+              DropdownMenuItem(
+                value: 'ASC',
+                child: Text('Thời gian: Tăng dần'),
+              ),
+              DropdownMenuItem(
+                value: 'DESC',
+                child: Text('Thời gian: Giảm dần'),
+              ),
+            ],
+            onChanged: (value) {
+              if (value == null) return;
+              setState(() => _selectedSort = value);
+              _applyFilters();
+            },
+          ),
+
+      
+
+
         ],
       ),
     );
@@ -846,10 +939,27 @@ Widget _buildSearchAndFilter() {
 
               ),
 
+              Builder(
+                builder: (_) {
+                  final categories = _requestCategoryNames(request);
+                  if (categories.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 10, bottom: 2),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 7,
+                      children: categories
+                          .map((category) => _categoryChip(category))
+                          .toList(),
+                    ),
+                  );
+                },
+              ),
+
               const SizedBox(height: 13),
-
               Text(
-
                 request.description?.trim().isNotEmpty == true
 
                     ? request.description!
@@ -902,28 +1012,7 @@ Widget _buildSearchAndFilter() {
 
               const SizedBox(height: 13),
 
-                            const SizedBox(height: 12),
-
-              // Chỉ hiển thị danh mục, không hiển thị tên phòng ban.
-              Builder(
-                builder: (_) {
-                  final categories = _requestCategoryNames(request);
-
-                  if (categories.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-
-                  return Wrap(
-                    spacing: 8,
-                    runSpacing: 7,
-                    children: categories
-                        .map((category) => _categoryChip(category))
-                        .toList(),
-                  );
-                },
-              ),
-
-const Divider(height: 1, color: borderColor),
+              const Divider(height: 1, color: borderColor),
 
               const SizedBox(height: 11),
 
