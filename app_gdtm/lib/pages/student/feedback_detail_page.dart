@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:app_gdtm/models/Category.dart';
 import 'package:app_gdtm/models/ClarificationConversation.dart';
 import 'package:app_gdtm/models/Department.dart';
+import 'package:app_gdtm/models/FileAttachment.dart';
 import 'package:app_gdtm/models/Message.dart';
 import 'package:app_gdtm/models/Request.dart';
 import 'package:app_gdtm/models/Users.dart';
@@ -10,6 +11,8 @@ import 'package:app_gdtm/pages/student/post_detail_page.dart';
 import 'package:app_gdtm/services/RequestService.dart';
 import 'package:app_gdtm/services/forum_service.dart';
 import 'package:app_gdtm/widgets/page_title.dart';
+import 'package:app_gdtm/widgets/attachment_utils.dart';
+import 'package:app_gdtm/widgets/pdf_view.dart';
 
 class FeedbackDetailPage extends StatefulWidget {
   final Request request;
@@ -141,10 +144,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
   String get _departmentName =>
       widget.departments
-          .where(
-            (department) =>
-                department.id == widget.request.departmentId,
-          )
+          .where((department) => department.id == widget.request.departmentId)
           .map((department) => department.name ?? '')
           .firstOrNull ??
       'Chưa xác định phòng ban';
@@ -172,8 +172,11 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
         builder: (context, constraints) {
           final bool isDesktop = constraints.maxWidth >= 900;
 
-          final double horizontalPadding =
-              isDesktop ? 48 : constraints.maxWidth >= 600 ? 28 : 16;
+          final double horizontalPadding = isDesktop
+              ? 48
+              : constraints.maxWidth >= 600
+              ? 28
+              : 16;
 
           return ListView(
             padding: EdgeInsets.fromLTRB(
@@ -197,19 +200,16 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
               FutureBuilder<FeedbackDetails>(
                 future: _details,
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState ==
-                      ConnectionState.waiting) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
                     return _buildLoading();
                   }
 
                   if (snapshot.hasError) {
                     return _DetailError(
-                      message:
-                          'Không tải được chi tiết: ${snapshot.error}',
+                      message: 'Không tải được chi tiết: ${snapshot.error}',
                       onRetry: () {
                         setState(() {
-                          _details =
-                              _service.getFeedbackDetails(
+                          _details = _service.getFeedbackDetails(
                             widget.request,
                           );
                         });
@@ -217,8 +217,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                     );
                   }
 
-                  final details =
-                      snapshot.data ?? const FeedbackDetails();
+                  final details = snapshot.data ?? const FeedbackDetails();
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,10 +261,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
         borderRadius: BorderRadius.circular(9),
         onTap: widget.onBack ?? () => Navigator.pop(context),
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 4,
-            vertical: 8,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -305,12 +301,10 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // ============================================================
 
   Widget _buildSummary() {
-    final statusColor =
-        _statusColor(widget.request.currentStatus);
+    final statusColor = _statusColor(widget.request.currentStatus);
 
     final isPublic =
-        widget.request.postStatus ==
-        RequestService.postStatusPublic;
+        widget.request.postStatus == RequestService.postStatusPublic;
 
     return Container(
       decoration: BoxDecoration(
@@ -332,25 +326,17 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
             height: 5,
             decoration: const BoxDecoration(
               color: hcmuteBlue,
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(16),
-              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
           ),
 
           Padding(
-            padding: const EdgeInsets.fromLTRB(
-              22,
-              20,
-              22,
-              22,
-            ),
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.request.subject ??
-                      'Không có tiêu đề',
+                  widget.request.subject ?? 'Không có tiêu đề',
                   style: const TextStyle(
                     fontSize: 22,
                     height: 1.3,
@@ -366,12 +352,8 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                   runSpacing: 10,
                   children: [
                     _StatusBadge(
-                      icon: _statusIcon(
-                        widget.request.currentStatus,
-                      ),
-                      text: _statusLabel(
-                        widget.request.currentStatus,
-                      ),
+                      icon: _statusIcon(widget.request.currentStatus),
+                      text: _statusLabel(widget.request.currentStatus),
                       color: statusColor,
                     ),
 
@@ -379,9 +361,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                       icon: isPublic
                           ? Icons.public_outlined
                           : Icons.account_balance_outlined,
-                      text: isPublic
-                          ? 'Công khai'
-                          : 'Gửi đến phòng ban',
+                      text: isPublic ? 'Công khai' : 'Gửi đến phòng ban',
                       color: hcmuteBlue,
                     ),
                   ],
@@ -389,17 +369,13 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
                 const SizedBox(height: 20),
 
-                const Divider(
-                  height: 1,
-                  color: borderColor,
-                ),
+                const Divider(height: 1, color: borderColor),
 
                 const SizedBox(height: 18),
 
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final bool twoColumns =
-                        constraints.maxWidth >= 650;
+                    final bool twoColumns = constraints.maxWidth >= 650;
 
                     return Wrap(
                       spacing: 12,
@@ -412,9 +388,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                           child: _InfoItem(
                             icon: Icons.schedule_outlined,
                             title: 'Thời gian gửi',
-                            value: _date(
-                              widget.request.timeCreate,
-                            ),
+                            value: _date(widget.request.timeCreate),
                           ),
                         ),
 
@@ -449,12 +423,9 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                           child: _InfoItem(
                             icon: Icons.location_on_outlined,
                             title: 'Địa điểm',
-                            value:
-                                widget.request.location
-                                            ?.isNotEmpty ==
-                                        true
-                                    ? widget.request.location!
-                                    : 'Chưa cập nhật',
+                            value: widget.request.location?.isNotEmpty == true
+                                ? widget.request.location!
+                                : 'Chưa cập nhật',
                           ),
                         ),
                       ],
@@ -474,10 +445,9 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // ============================================================
 
   Widget _buildDescription() {
-    final description =
-        widget.request.description?.isNotEmpty == true
-            ? widget.request.description!
-            : 'Chưa có nội dung.';
+    final description = widget.request.description?.isNotEmpty == true
+        ? widget.request.description!
+        : 'Chưa có nội dung.';
 
     return _SectionCard(
       title: 'Nội dung góp ý',
@@ -488,9 +458,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
         decoration: BoxDecoration(
           color: const Color(0xFFF8FAFC),
           borderRadius: BorderRadius.circular(11),
-          border: Border.all(
-            color: const Color(0xFFE8EEF5),
-          ),
+          border: Border.all(color: const Color(0xFFE8EEF5)),
         ),
         child: Text(
           description,
@@ -508,9 +476,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // ATTACHMENTS
   // ============================================================
 
-  Widget _buildAttachments(
-    FeedbackDetails details,
-  ) {
+  Widget _buildAttachments(FeedbackDetails details) {
     return _SectionCard(
       title: 'Tệp đính kèm',
       icon: Icons.attach_file_rounded,
@@ -523,19 +489,14 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
               children: details.attachments
                   .map(
                     (file) => Container(
-                      margin:
-                          const EdgeInsets.only(bottom: 10),
+                      margin: const EdgeInsets.only(bottom: 10),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF8FAFC),
-                        borderRadius:
-                            BorderRadius.circular(11),
-                        border: Border.all(
-                          color: borderColor,
-                        ),
+                        borderRadius: BorderRadius.circular(11),
+                        border: Border.all(color: borderColor),
                       ),
                       child: ListTile(
-                        contentPadding:
-                            const EdgeInsets.symmetric(
+                        contentPadding: const EdgeInsets.symmetric(
                           horizontal: 13,
                           vertical: 4,
                         ),
@@ -544,8 +505,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                           height: 42,
                           decoration: BoxDecoration(
                             color: hcmuteLightBlue,
-                            borderRadius:
-                                BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(
                             Icons.insert_drive_file_outlined,
@@ -553,8 +513,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                           ),
                         ),
                         title: Text(
-                          file.filename ??
-                              'Tệp đính kèm',
+                          file.filename ?? 'Tệp đính kèm',
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
@@ -575,11 +534,8 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                           height: 34,
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius:
-                                BorderRadius.circular(8),
-                            border: Border.all(
-                              color: borderColor,
-                            ),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: borderColor),
                           ),
                           child: const Icon(
                             Icons.open_in_new_rounded,
@@ -589,9 +545,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                         ),
                         onTap: file.fileUrl == null
                             ? null
-                            : () => _showAttachmentUrl(
-                                  file.fileUrl!,
-                                ),
+                            : () => _showAttachmentPreview(file),
                       ),
                     ),
                   )
@@ -604,26 +558,18 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // BOTTOM SECTION
   // ============================================================
 
-  Widget _buildBottomSection(
-    FeedbackDetails details,
-  ) {
+  Widget _buildBottomSection(FeedbackDetails details) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final bool twoColumns =
-            constraints.maxWidth >= 850;
+        final bool twoColumns = constraints.maxWidth >= 850;
 
         if (twoColumns) {
           return Row(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: _buildTimeline(details),
-              ),
+              Expanded(child: _buildTimeline(details)),
               const SizedBox(width: 16),
-              Expanded(
-                child: _buildConversations(details),
-              ),
+              Expanded(child: _buildConversations(details)),
             ],
           );
         }
@@ -643,9 +589,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // TIMELINE
   // ============================================================
 
-  Widget _buildTimeline(
-    FeedbackDetails details,
-  ) {
+  Widget _buildTimeline(FeedbackDetails details) {
     return _SectionCard(
       title: 'Lịch sử xử lý',
       icon: Icons.timeline_rounded,
@@ -655,30 +599,21 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
               text: 'Chưa có lịch sử xử lý.',
             )
           : Column(
-              children: List.generate(
-                details.histories.length,
-                (index) {
-                  final item =
-                      details.histories[index];
+              children: List.generate(details.histories.length, (index) {
+                final item = details.histories[index];
 
-                  final bool isLast =
-                      index ==
-                      details.histories.length - 1;
+                final bool isLast = index == details.histories.length - 1;
 
-                  final color =
-                      _statusColor(item.status);
+                final color = _statusColor(item.status);
 
-                  return _TimelineItem(
-                    title:
-                        _statusLabel(item.status),
-                    date: _date(item.createAt),
-                    color: color,
-                    icon:
-                        _statusIcon(item.status),
-                    isLast: isLast,
-                  );
-                },
-              ),
+                return _TimelineItem(
+                  title: _statusLabel(item.status),
+                  date: _date(item.createAt),
+                  color: color,
+                  icon: _statusIcon(item.status),
+                  isLast: isLast,
+                );
+              }),
             ),
     );
   }
@@ -687,11 +622,8 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // CONVERSATIONS
   // ============================================================
 
-  Widget _buildConversations(
-    FeedbackDetails details,
-  ) {
-    if (widget.request.postStatus ==
-        RequestService.postStatusPublic) {
+  Widget _buildConversations(FeedbackDetails details) {
+    if (widget.request.postStatus == RequestService.postStatusPublic) {
       return _SectionCard(
         title: 'Trao đổi',
         icon: Icons.forum_outlined,
@@ -701,13 +633,10 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
           decoration: BoxDecoration(
             color: hcmuteLightBlue,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: hcmuteBlue.withValues(alpha: .12),
-            ),
+            border: Border.all(color: hcmuteBlue.withValues(alpha: .12)),
           ),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
@@ -716,13 +645,9 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                     height: 38,
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius:
-                          BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(
-                      Icons.public,
-                      color: hcmuteBlue,
-                    ),
+                    child: const Icon(Icons.public, color: hcmuteBlue),
                   ),
                   const SizedBox(width: 11),
                   const Expanded(
@@ -756,20 +681,14 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                   style: FilledButton.styleFrom(
                     backgroundColor: hcmuteBlue,
                     foregroundColor: Colors.white,
-                    minimumSize:
-                        const Size.fromHeight(45),
+                    minimumSize: const Size.fromHeight(45),
                     shape: RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(9),
+                      borderRadius: BorderRadius.circular(9),
                     ),
                   ),
                   onPressed: _openForumPost,
-                  icon: const Icon(
-                    Icons.open_in_new_rounded,
-                    size: 18,
-                  ),
-                  label:
-                      const Text('Xem bài đăng'),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                  label: const Text('Xem bài đăng'),
                 ),
               ),
             ],
@@ -787,76 +706,45 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
               text: 'Chưa có cuộc hội thoại nào.',
             )
           : Column(
-              children: details.conversations
-                  .map(_buildConversation)
-                  .toList(),
+              children: details.conversations.map(_buildConversation).toList(),
             ),
     );
   }
 
-  Widget _buildConversation(
-    ClarificationConversation conversation,
-  ) {
-    final bool open =
-        conversation.isOpen == true;
+  Widget _buildConversation(ClarificationConversation conversation) {
+    final bool open = conversation.isOpen == true;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(11),
-        border: Border.all(
-          color: borderColor,
-        ),
+        border: Border.all(color: borderColor),
       ),
       child: ExpansionTile(
-        tilePadding:
-            const EdgeInsets.symmetric(
-          horizontal: 14,
-        ),
-        childrenPadding:
-            const EdgeInsets.fromLTRB(
-          14,
-          0,
-          14,
-          14,
-        ),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
         shape: const RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.all(
-            Radius.circular(11),
-          ),
+          borderRadius: BorderRadius.all(Radius.circular(11)),
         ),
-        collapsedShape:
-            const RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.all(
-            Radius.circular(11),
-          ),
+        collapsedShape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(11)),
         ),
         leading: Container(
           width: 38,
           height: 38,
           decoration: BoxDecoration(
-            color: open
-                ? const Color(0xFFEAF8F0)
-                : const Color(0xFFF1F3F5),
-            borderRadius:
-                BorderRadius.circular(9),
+            color: open ? const Color(0xFFEAF8F0) : const Color(0xFFF1F3F5),
+            borderRadius: BorderRadius.circular(9),
           ),
           child: Icon(
-            open
-                ? Icons.lock_open_rounded
-                : Icons.lock_outline_rounded,
+            open ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
             size: 19,
-            color: open
-                ? const Color(0xFF16A34A)
-                : textSecondary,
+            color: open ? const Color(0xFF16A34A) : textSecondary,
           ),
         ),
         title: Text(
-          conversation.subject ??
-              'Cuộc hội thoại',
+          conversation.subject ?? 'Cuộc hội thoại',
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w700,
@@ -867,35 +755,23 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
           open ? 'Đang mở' : 'Đã đóng',
           style: TextStyle(
             fontSize: 12,
-            color: open
-                ? const Color(0xFF16A34A)
-                : textSecondary,
+            color: open ? const Color(0xFF16A34A) : textSecondary,
           ),
         ),
-        children:
-            conversation.messages.isEmpty
-                ? [
-                    const Align(
-                      alignment:
-                          Alignment.centerLeft,
-                      child: Padding(
-                        padding:
-                            EdgeInsets.only(
-                          top: 4,
-                        ),
-                        child: Text(
-                          'Chưa có tin nhắn.',
-                          style: TextStyle(
-                            color:
-                                textSecondary,
-                          ),
-                        ),
-                      ),
+        children: conversation.messages.isEmpty
+            ? [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Chưa có tin nhắn.',
+                      style: TextStyle(color: textSecondary),
                     ),
-                  ]
-                : conversation.messages
-                    .map(_messageTile)
-                    .toList(),
+                  ),
+                ),
+              ]
+            : conversation.messages.map(_messageTile).toList(),
       ),
     );
   }
@@ -907,21 +783,15 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   Widget _messageTile(Message message) {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(
-        bottom: 8,
-      ),
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(10),
-        border: Border.all(
-          color: borderColor,
-        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             message.content ?? '—',
@@ -944,10 +814,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
               const SizedBox(width: 4),
               Text(
                 _date(message.createAt),
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: textSecondary,
-                ),
+                style: const TextStyle(fontSize: 11, color: textSecondary),
               ),
             ],
           ),
@@ -966,25 +833,17 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: borderColor,
-        ),
+        border: Border.all(color: borderColor),
       ),
       child: const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(
-              color: hcmuteBlue,
-              strokeWidth: 2.5,
-            ),
+            CircularProgressIndicator(color: hcmuteBlue, strokeWidth: 2.5),
             SizedBox(height: 14),
             Text(
               'Đang tải thông tin...',
-              style: TextStyle(
-                color: textSecondary,
-                fontSize: 13,
-              ),
+              style: TextStyle(color: textSecondary, fontSize: 13),
             ),
           ],
         ),
@@ -1001,23 +860,16 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
     if (id == null) return;
 
-    final service = ForumService(
-      currentUserId: () => widget.user.id,
-    );
+    final service = ForumService(currentUserId: () => widget.user.id);
 
     try {
-      final post =
-          await service.getPostDetail(id);
+      final post = await service.getPostDetail(id);
 
       if (!mounted) return;
 
       if (post == null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(
-          const SnackBar(
-            content:
-                Text('Bài đăng không còn tồn tại.'),
-          ),
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bài đăng không còn tồn tại.')),
         );
 
         return;
@@ -1026,65 +878,165 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => PostDetailPage(
-            initialPost: post,
-            service: service,
-          ),
+          builder: (_) => PostDetailPage(initialPost: post, service: service),
         ),
       );
     } catch (error) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content:
-              Text('Không mở được bài đăng: $error'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Không mở được bài đăng: $error')));
     }
   }
 
   // ============================================================
-  // ATTACHMENT URL
+  // ATTACHMENT PREVIEW
   // ============================================================
 
-  void _showAttachmentUrl(String url) {
+  void _showAttachmentPreview(FileAttachment file) {
+    final url = file.fileUrl?.trim();
+    if (url == null || url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không tìm thấy đường dẫn tệp.')),
+      );
+      return;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đường dẫn tệp không hợp lệ.')),
+      );
+      return;
+    }
+
+    final extension = attachmentExt(file);
+    final isImage = const {
+      'jpg',
+      'jpeg',
+      'png',
+      'gif',
+      'webp',
+      'bmp',
+    }.contains(extension);
+    final isPdfFile = extension == 'pdf';
+    final Widget preview;
+
+    if (isPdfFile) {
+      preview = PdfView(url: url);
+    } else if (isImage) {
+      preview = InteractiveViewer(
+        child: Image.network(
+          url,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => const _AttachmentPreviewError(),
+        ),
+      );
+    } else {
+      preview = _UnsupportedAttachmentPreview(
+        onOpen: () => openUrl(context, url),
+      );
+    }
+
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.all(20),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900, maxHeight: 720),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 10, 10),
+                child: Row(
+                  children: [
+                    Icon(
+                      isPdfFile
+                          ? Icons.picture_as_pdf
+                          : isImage
+                          ? Icons.image_outlined
+                          : Icons.insert_drive_file_outlined,
+                      color: hcmuteBlue,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        file.filename ?? 'Tệp đính kèm',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: textPrimary,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Đóng',
+                      onPressed: () => Navigator.pop(dialogContext),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Flexible(child: preview),
+            ],
+          ),
         ),
-        title: const Row(
+      ),
+    );
+  }
+}
+
+class _UnsupportedAttachmentPreview extends StatelessWidget {
+  final VoidCallback onOpen;
+
+  const _UnsupportedAttachmentPreview({required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.attach_file_rounded,
-              color: hcmuteBlue,
+            const Icon(
+              Icons.insert_drive_file_outlined,
+              size: 54,
+              color: Color(0xFF98A2B3),
             ),
-            SizedBox(width: 8),
-            Text('Tệp đính kèm'),
+            const SizedBox(height: 12),
+            const Text(
+              'Định dạng này chưa hỗ trợ xem trước.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15, color: Color(0xFF667085)),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(Icons.open_in_new_rounded),
+              label: const Text('Mở tệp'),
+            ),
           ],
         ),
-        content: SelectableText(
-          url,
-          style: const TextStyle(
-            fontSize: 13,
-            height: 1.5,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () =>
-                Navigator.pop(context),
-            child: const Text(
-              'Đóng',
-              style: TextStyle(
-                color: hcmuteBlue,
-              ),
-            ),
-          ),
-        ],
+      ),
+    );
+  }
+}
+
+class _AttachmentPreviewError extends StatelessWidget {
+  const _AttachmentPreviewError();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Text(
+        'Không thể tải bản xem trước của tệp.',
+        style: TextStyle(color: Color(0xFF667085)),
       ),
     );
   }
@@ -1105,14 +1057,11 @@ class _SectionCard extends StatelessWidget {
     required this.child,
   });
 
-  static const Color hcmuteBlue =
-      Color(0xFF005BAA);
+  static const Color hcmuteBlue = Color(0xFF005BAA);
 
-  static const Color textPrimary =
-      Color(0xFF172B4D);
+  static const Color textPrimary = Color(0xFF172B4D);
 
-  static const Color borderColor =
-      Color(0xFFE3EAF2);
+  static const Color borderColor = Color(0xFFE3EAF2);
 
   @override
   Widget build(BuildContext context) {
@@ -1121,25 +1070,18 @@ class _SectionCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(16),
-        border: Border.all(
-          color: borderColor,
-        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color:
-                Colors.black.withValues(
-              alpha: 0.035,
-            ),
+            color: Colors.black.withValues(alpha: 0.035),
             blurRadius: 14,
             offset: const Offset(0, 5),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -1147,16 +1089,10 @@ class _SectionCard extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color:
-                      const Color(0xFFEAF4FC),
-                  borderRadius:
-                      BorderRadius.circular(9),
+                  color: const Color(0xFFEAF4FC),
+                  borderRadius: BorderRadius.circular(9),
                 ),
-                child: Icon(
-                  icon,
-                  size: 19,
-                  color: hcmuteBlue,
-                ),
+                child: Icon(icon, size: 19, color: hcmuteBlue),
               ),
 
               const SizedBox(width: 10),
@@ -1165,8 +1101,7 @@ class _SectionCard extends StatelessWidget {
                 title,
                 style: const TextStyle(
                   fontSize: 16,
-                  fontWeight:
-                      FontWeight.w800,
+                  fontWeight: FontWeight.w800,
                   color: textPrimary,
                 ),
               ),
@@ -1197,17 +1132,13 @@ class _InfoItem extends StatelessWidget {
     required this.value,
   });
 
-  static const Color hcmuteBlue =
-      Color(0xFF005BAA);
+  static const Color hcmuteBlue = Color(0xFF005BAA);
 
-  static const Color textPrimary =
-      Color(0xFF172B4D);
+  static const Color textPrimary = Color(0xFF172B4D);
 
-  static const Color textSecondary =
-      Color(0xFF667085);
+  static const Color textSecondary = Color(0xFF667085);
 
-  static const Color borderColor =
-      Color(0xFFE3EAF2);
+  static const Color borderColor = Color(0xFFE3EAF2);
 
   @override
   Widget build(BuildContext context) {
@@ -1215,45 +1146,33 @@ class _InfoItem extends StatelessWidget {
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: const Color(0xFFFAFBFC),
-        borderRadius:
-            BorderRadius.circular(10),
-        border: Border.all(
-          color: borderColor,
-        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color:
-                  const Color(0xFFEAF4FC),
-              borderRadius:
-                  BorderRadius.circular(8),
+              color: const Color(0xFFEAF4FC),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              icon,
-              size: 17,
-              color: hcmuteBlue,
-            ),
+            child: Icon(icon, size: 17, color: hcmuteBlue),
           ),
 
           const SizedBox(width: 10),
 
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
                   style: const TextStyle(
                     fontSize: 11,
-                    fontWeight:
-                        FontWeight.w600,
+                    fontWeight: FontWeight.w600,
                     color: textSecondary,
                   ),
                 ),
@@ -1265,8 +1184,7 @@ class _InfoItem extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 13,
                     height: 1.35,
-                    fontWeight:
-                        FontWeight.w600,
+                    fontWeight: FontWeight.w600,
                     color: textPrimary,
                   ),
                 ),
@@ -1297,30 +1215,16 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 11,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withValues(
-          alpha: .09,
-        ),
-        borderRadius:
-            BorderRadius.circular(9),
-        border: Border.all(
-          color: color.withValues(
-            alpha: .22,
-          ),
-        ),
+        color: color.withValues(alpha: .09),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: color.withValues(alpha: .22)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 16,
-            color: color,
-          ),
+          Icon(icon, size: 16, color: color),
 
           const SizedBox(width: 6),
 
@@ -1328,8 +1232,7 @@ class _StatusBadge extends StatelessWidget {
             text,
             style: TextStyle(
               fontSize: 12.5,
-              fontWeight:
-                  FontWeight.w700,
+              fontWeight: FontWeight.w700,
               color: color,
             ),
           ),
@@ -1358,18 +1261,15 @@ class _TimelineItem extends StatelessWidget {
     required this.isLast,
   });
 
-  static const Color textPrimary =
-      Color(0xFF172B4D);
+  static const Color textPrimary = Color(0xFF172B4D);
 
-  static const Color textSecondary =
-      Color(0xFF667085);
+  static const Color textSecondary = Color(0xFF667085);
 
   @override
   Widget build(BuildContext context) {
     return IntrinsicHeight(
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 38,
@@ -1379,30 +1279,18 @@ class _TimelineItem extends StatelessWidget {
                   width: 30,
                   height: 30,
                   decoration: BoxDecoration(
-                    color: color.withValues(
-                      alpha: .10,
-                    ),
+                    color: color.withValues(alpha: .10),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    icon,
-                    size: 16,
-                    color: color,
-                  ),
+                  child: Icon(icon, size: 16, color: color),
                 ),
 
                 if (!isLast)
                   Expanded(
                     child: Container(
                       width: 2,
-                      margin:
-                          const EdgeInsets
-                              .symmetric(
-                        vertical: 4,
-                      ),
-                      color: color.withValues(
-                        alpha: .18,
-                      ),
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      color: color.withValues(alpha: .18),
                     ),
                   ),
               ],
@@ -1413,31 +1301,21 @@ class _TimelineItem extends StatelessWidget {
 
           Expanded(
             child: Container(
-              margin: const EdgeInsets.only(
-                bottom: 14,
-              ),
-              padding:
-                  const EdgeInsets.all(13),
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(13),
               decoration: BoxDecoration(
-                color:
-                    const Color(0xFFF8FAFC),
-                borderRadius:
-                    BorderRadius.circular(10),
-                border: Border.all(
-                  color:
-                      const Color(0xFFE8EEF5),
-                ),
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE8EEF5)),
               ),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
                     style: const TextStyle(
                       fontSize: 13.5,
-                      fontWeight:
-                          FontWeight.w700,
+                      fontWeight: FontWeight.w700,
                       color: textPrimary,
                     ),
                   ),
@@ -1454,11 +1332,9 @@ class _TimelineItem extends StatelessWidget {
                       const SizedBox(width: 4),
                       Text(
                         date,
-                        style:
-                            const TextStyle(
+                        style: const TextStyle(
                           fontSize: 11,
-                          color:
-                              textSecondary,
+                          color: textSecondary,
                         ),
                       ),
                     ],
@@ -1481,44 +1357,28 @@ class _EmptyState extends StatelessWidget {
   final IconData icon;
   final String text;
 
-  const _EmptyState({
-    required this.icon,
-    required this.text,
-  });
+  const _EmptyState({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        vertical: 24,
-        horizontal: 16,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
-        borderRadius:
-            BorderRadius.circular(11),
-        border: Border.all(
-          color: const Color(0xFFE8EEF5),
-        ),
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: const Color(0xFFE8EEF5)),
       ),
       child: Column(
         children: [
-          Icon(
-            icon,
-            size: 32,
-            color: const Color(0xFF98A2B3),
-          ),
+          Icon(icon, size: 32, color: const Color(0xFF98A2B3)),
 
           const SizedBox(height: 8),
 
           Text(
             text,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 13,
-              color: Color(0xFF667085),
-            ),
+            style: const TextStyle(fontSize: 13, color: Color(0xFF667085)),
           ),
         ],
       ),
@@ -1534,10 +1394,7 @@ class _DetailError extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
 
-  const _DetailError({
-    required this.message,
-    required this.onRetry,
-  });
+  const _DetailError({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -1546,11 +1403,8 @@ class _DetailError extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-            BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFF0D0D0),
-        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF0D0D0)),
       ),
       child: Column(
         children: [
@@ -1565,26 +1419,18 @@ class _DetailError extends StatelessWidget {
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 13,
-              color: Color(0xFF667085),
-            ),
+            style: const TextStyle(fontSize: 13, color: Color(0xFF667085)),
           ),
 
           const SizedBox(height: 12),
 
           OutlinedButton.icon(
             onPressed: onRetry,
-            icon: const Icon(
-              Icons.refresh_rounded,
-            ),
+            icon: const Icon(Icons.refresh_rounded),
             label: const Text('Thử lại'),
             style: OutlinedButton.styleFrom(
-              foregroundColor:
-                  const Color(0xFF005BAA),
-              side: const BorderSide(
-                color: Color(0xFF005BAA),
-              ),
+              foregroundColor: const Color(0xFF005BAA),
+              side: const BorderSide(color: Color(0xFF005BAA)),
             ),
           ),
         ],
