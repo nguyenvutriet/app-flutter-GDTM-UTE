@@ -1,13 +1,15 @@
 // lib/widgets/reactors_sheet.dart
 // Bottom sheet "ai đã thả reaction" kiểu Facebook: tab Tất cả + từng loại reaction.
+// Chạm vào một người để xem card thông tin (onTapUser).
 import 'package:flutter/material.dart';
 import 'package:app_gdtm/models/forum_post.dart';
 import 'forum_utils.dart';
 
 Future<void> showReactorsSheet(
   BuildContext context,
-  Future<List<ReactorDTO>> Function() loader,
-) {
+  Future<List<ReactorDTO>> Function() loader, {
+  ValueChanged<ReactorDTO>? onTapUser,
+}) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -15,13 +17,14 @@ Future<void> showReactorsSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
-    builder: (_) => _ReactorsSheet(loader: loader),
+    builder: (_) => _ReactorsSheet(loader: loader, onTapUser: onTapUser),
   );
 }
 
 class _ReactorsSheet extends StatefulWidget {
   final Future<List<ReactorDTO>> Function() loader;
-  const _ReactorsSheet({required this.loader});
+  final ValueChanged<ReactorDTO>? onTapUser;
+  const _ReactorsSheet({required this.loader, this.onTapUser});
 
   @override
   State<_ReactorsSheet> createState() => _ReactorsSheetState();
@@ -104,6 +107,7 @@ class _ReactorsSheetState extends State<_ReactorsSheet> {
         itemBuilder: (_, i) {
           final r = items[i];
           return ListTile(
+            onTap: widget.onTapUser == null ? null : () => widget.onTapUser!(r),
             leading: InitialAvatar(name: r.userName, radius: 20),
             title: Row(children: [
               Flexible(

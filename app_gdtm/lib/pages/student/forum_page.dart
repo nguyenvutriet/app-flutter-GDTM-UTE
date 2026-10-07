@@ -1,12 +1,16 @@
 // lib/pages/student/forum_page.dart
-// Bảng tin diễn đàn kiểu Facebook: tìm kiếm, sắp xếp, cuộn vô hạn, kéo để làm mới.
+// Bảng tin diễn đàn kiểu Facebook: tìm kiếm từng chữ, lọc ngày / phòng ban,
+// sắp xếp, cuộn vô hạn (kể cả khi đang tìm/lọc), kéo để làm mới.
 // embedded = true: dùng bên trong AppShell (không có Scaffold/AppBar riêng).
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'package:app_gdtm/models/forum_post.dart';
 import 'package:app_gdtm/services/forum_service.dart';
 import 'package:app_gdtm/widgets/forum_utils.dart';
+import 'package:app_gdtm/widgets/info_cards.dart';
 import 'package:app_gdtm/widgets/post_card.dart';
 import 'package:app_gdtm/widgets/reactors_sheet.dart';
 import 'post_detail_page.dart';
@@ -50,6 +54,15 @@ class _ForumPageState extends State<ForumPage> {
 
   final ScrollController _scroll = ScrollController();
   final TextEditingController _searchCtl = TextEditingController();
+  Timer? _debounce;
+
+  // Hộp gợi ý dưới thanh tìm kiếm
+  final FocusNode _searchFocus = FocusNode();
+  final LayerLink _searchLink = LayerLink();
+  Timer? _suggestTimer;
+  int _sgGen = 0;
+  bool _showSuggest = false;
+  List<SearchSuggestion> _suggestions = [];
 
   List<ForumPostDTO> _posts = [];
   DocumentSnapshot<Map<String, dynamic>>? _last;
@@ -62,16 +75,39 @@ class _ForumPageState extends State<ForumPage> {
   bool _isAdmin = false;
   final Set<String> _reportedPosts = {};
 
+  // Bộ lọc
+  String? _departmentId;
+  DateTime? _fromDate;
+  DateTime? _toDate;
+  List<DepartmentInfo> _departments = [];
+
+  /// Mỗi lần tải mới tăng 1, kết quả của lần tải cũ (đã bị thay thế) sẽ bị bỏ.
+  int _gen = 0;
+
+  bool get _hasFilter => _departmentId != null || _fromDate != null;
+  bool get _hasQuery => _keyword.isNotEmpty || _hasFilter;
+
   @override
   void initState() {
     super.initState();
+    _searchFocus.addListener(() {
+      if (!mounted) return;
+      if (_searchFocus.hasFocus) {
+        _openSuggest();
+      } else {
+        // Chờ một chút để chạm vào dòng gợi ý kịp được xử lý trước khi đóng hộp
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted && !_searchFocus.hasFocus && _showSuggest) {
+            setState(() => _showSuggest = false);
+          }
+        });
+      }
+    });
     _loadMeta();
+    _loadDepartments();
     _scroll.addListener(() {
-      if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 400 &&
-          _hasMore &&
-          !_loading &&
-          _keyword.isEmpty) {
-        _load();
+      if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 400) {
+        _loadMoreIfNeeded();
       }
     });
     Future.microtask(() => _load(reset: true));
@@ -79,13 +115,21 @@ class _ForumPageState extends State<ForumPage> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _suggestTimer?.cancel();
+    _searchFocus.dispose();
     _scroll.dispose();
     _searchCtl.dispose();
     super.dispose();
   }
 
+  void _loadMoreIfNeeded() {
+    if (_hasMore && !_loading && _error == null) _load();
+  }
+
   Future<void> _load({bool reset = false}) async {
-    if (_loading) return;
+    if (_loading && !reset) return;
+    final gen = ++_gen;
     setState(() {
       _loading = true;
       _error = null;
@@ -96,30 +140,42 @@ class _ForumPageState extends State<ForumPage> {
       }
     });
     try {
-      if (_keyword.isNotEmpty) {
-        final r = await widget.service.searchPublicPosts(_keyword, sortBy: _sortBy);
-        if (!mounted) return;
-        setState(() {
-          _posts = r;
-          _hasMore = false;
-        });
-      } else {
-        final page = await widget.service.getPublicPosts(startAfter: _last, sortBy: _sortBy);
-        if (!mounted) return;
-        setState(() {
-          _posts = [..._posts, ...page.posts];
-          _last = page.lastDoc ?? _last;
-          _hasMore = page.hasMore;
-        });
-      }
+      final page = await widget.service.getPublicPosts(
+        startAfter: reset ? null : _last,
+        sortBy: _sortBy,
+        keyword: _keyword,
+        departmentId: _departmentId,
+        fromDate: _fromDate,
+        toDate: _toDate,
+      );
+      if (!mounted || gen != _gen) return;
+      setState(() {
+        _posts = [..._posts, ...page.posts];
+        _last = page.lastDoc ?? _last;
+        _hasMore = page.hasMore;
+      });
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted && gen == _gen) setState(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && gen == _gen) {
+        setState(() => _loading = false);
+        _fillIfShort();
+      }
     }
   }
 
-    Future<void> _loadMeta() async {
+  /// Khi lọc/tìm kiếm trả về ít bài, danh sách chưa đủ dài để cuộn
+  /// (không có sự kiện cuộn để tải tiếp) -> tự tải thêm.
+  void _fillIfShort() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      if (_scroll.position.maxScrollExtent - _scroll.position.pixels < 400) {
+        _loadMoreIfNeeded();
+      }
+    });
+  }
+
+  Future<void> _loadMeta() async {
     try {
       final admin = await widget.service.isAdmin();
       final ids = (!admin && widget.canReport)
@@ -130,6 +186,13 @@ class _ForumPageState extends State<ForumPage> {
         _isAdmin = admin;
         _reportedPosts.addAll(ids);
       });
+    } catch (_) {}
+  }
+
+  Future<void> _loadDepartments() async {
+    try {
+      final list = await widget.service.getDepartments();
+      if (mounted) setState(() => _departments = list);
     } catch (_) {}
   }
 
@@ -190,9 +253,7 @@ class _ForumPageState extends State<ForumPage> {
         ),
       );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-      }
+      _snack(e.toString());
     }
   }
 
@@ -210,21 +271,360 @@ class _ForumPageState extends State<ForumPage> {
     );
   }
 
-  void _submitSearch(String v) {
-    _keyword = v.trim();
+  // ---------------- Card thông tin ----------------
+
+  void _showUser(String userId, String name) =>
+      showUserCard(context, widget.service, userId, fallbackName: name);
+
+  void _showDepartment(ForumPostDTO p) {
+    showDepartmentCard(
+      context,
+      widget.service,
+      p.departmentId,
+      fallbackName: p.departmentName,
+      onViewPosts: p.departmentId.isEmpty
+          ? null
+          : () {
+              setState(() => _departmentId = p.departmentId);
+              _reloadFromTop();
+            },
+    );
+  }
+
+  // ---------------- Tìm kiếm / lọc ----------------
+
+  void _reloadFromTop() {
+    if (_scroll.hasClients) _scroll.jumpTo(0);
     _load(reset: true);
   }
 
+  /// Gõ tới đâu tìm tới đó (chờ 400ms sau lần gõ cuối).
+  void _onSearchChanged(String v) {
+    setState(() => _showSuggest = true); // cập nhật nút xóa (x) + mở hộp gợi ý
+    _scheduleSuggest(v);
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () {
+      final kw = v.trim();
+      if (kw == _keyword) return;
+      _keyword = kw;
+      _reloadFromTop();
+    });
+  }
+
+  void _submitSearch(String v) {
+    _debounce?.cancel();
+    _keyword = v.trim();
+    widget.service.addRecentSearch(_keyword);
+    _hideSuggest();
+    _reloadFromTop();
+  }
+
   void _clearSearch() {
+    _debounce?.cancel();
     _searchCtl.clear();
     _keyword = '';
-    _load(reset: true);
+    setState(() => _suggestions = []);
+    _reloadFromTop();
   }
 
   void _toggleSearch() {
     setState(() => _searching = !_searching);
     if (!_searching && _keyword.isNotEmpty) _clearSearch();
   }
+
+  // ---------------- Hộp gợi ý ----------------
+
+  void _openSuggest() {
+    if (!mounted) return;
+    setState(() => _showSuggest = true);
+    _scheduleSuggest(_searchCtl.text, immediate: true);
+  }
+
+  void _hideSuggest() {
+    _suggestTimer?.cancel();
+    _sgGen++;
+    _searchFocus.unfocus();
+    if (mounted) setState(() => _showSuggest = false);
+  }
+
+  /// Gõ xong 200ms mới lấy gợi ý (kết quả cũ đến trễ sẽ bị bỏ).
+  void _scheduleSuggest(String text, {bool immediate = false}) {
+    _suggestTimer?.cancel();
+    final kw = text.trim();
+    if (kw.isEmpty) {
+      _sgGen++;
+      if (_suggestions.isNotEmpty) setState(() => _suggestions = []);
+      return;
+    }
+    _suggestTimer = Timer(Duration(milliseconds: immediate ? 0 : 200), () async {
+      final gen = ++_sgGen;
+      try {
+        final list = await widget.service.getSuggestions(kw);
+        if (!mounted || gen != _sgGen) return;
+        setState(() => _suggestions = list);
+      } catch (_) {
+        if (mounted && gen == _sgGen) setState(() => _suggestions = []);
+      }
+    });
+  }
+
+  /// Chọn một gợi ý / lịch sử: tìm ngay theo cụm đó.
+  void _applyKeyword(String kw) {
+    _debounce?.cancel();
+    _searchCtl.text = kw;
+    _searchCtl.selection = TextSelection.collapsed(offset: kw.length);
+    _keyword = kw.trim();
+    widget.service.addRecentSearch(_keyword);
+    _hideSuggest();
+    _reloadFromTop();
+  }
+
+  /// Chọn gợi ý phòng ban: bỏ từ khóa, lọc theo phòng ban đó.
+  void _applyDepartment(SearchSuggestion s) {
+    _debounce?.cancel();
+    _searchCtl.clear();
+    _keyword = '';
+    _departmentId = s.departmentId;
+    _hideSuggest();
+    _reloadFromTop();
+  }
+
+  /// Đưa chữ gợi ý lên ô nhập để sửa tiếp (mũi tên ↖), chưa tìm.
+  void _fillKeyword(String kw) {
+    _searchCtl.text = kw;
+    _searchCtl.selection = TextSelection.collapsed(offset: kw.length);
+    _onSearchChanged(kw);
+  }
+
+  /// Tô đậm các chữ trùng từ khóa (không phân biệt hoa/thường, dấu).
+  Widget _highlighted(String text, List<String> tokens) {
+    const base = TextStyle(fontSize: 14.5, color: Colors.black87);
+    final folded = foldVi(text);
+    if (tokens.isEmpty || folded.length != text.length) {
+      return Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: base);
+    }
+    final mark = List<bool>.filled(text.length, false);
+    for (final t in tokens) {
+      var i = folded.indexOf(t);
+      while (i >= 0) {
+        for (var k = i; k < i + t.length; k++) {
+          mark[k] = true;
+        }
+        i = folded.indexOf(t, i + 1);
+      }
+    }
+    final spans = <TextSpan>[];
+    var start = 0;
+    for (var i = 1; i <= text.length; i++) {
+      if (i == text.length || mark[i] != mark[start]) {
+        spans.add(TextSpan(
+          text: text.substring(start, i),
+          style: mark[start] ? const TextStyle(fontWeight: FontWeight.w700) : null,
+        ));
+        start = i;
+      }
+    }
+    return Text.rich(TextSpan(style: base, children: spans),
+        maxLines: 1, overflow: TextOverflow.ellipsis);
+  }
+
+  Widget _suggestOverlay() {
+    if (!_showSuggest) return const SizedBox.shrink();
+
+    final kw = _searchCtl.text.trim();
+    final tokens = searchTokens(kw);
+    final history = widget.service.recentSearches;
+    final rows = <Widget>[];
+
+    if (kw.isEmpty) {
+      // Chưa gõ gì: hiện lịch sử tìm kiếm
+      if (history.isEmpty) return const SizedBox.shrink();
+      rows.add(Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+        child: Row(children: [
+          const Expanded(
+            child: Text('Tìm kiếm gần đây',
+                style: TextStyle(fontWeight: FontWeight.w700, color: kFbText2)),
+          ),
+          TextButton(
+            onPressed: () {
+              widget.service.clearRecentSearches();
+              setState(() {});
+            },
+            child: const Text('Xóa tất cả'),
+          ),
+        ]),
+      ));
+      for (final h in List<String>.from(history)) {
+        rows.add(ListTile(
+          dense: true,
+          leading: const Icon(Icons.history, color: kFbText2),
+          title: Text(h, maxLines: 1, overflow: TextOverflow.ellipsis),
+          trailing: IconButton(
+            icon: const Icon(Icons.close, size: 18, color: kFbText2),
+            onPressed: () {
+              widget.service.removeRecentSearch(h);
+              setState(() {});
+            },
+          ),
+          onTap: () => _applyKeyword(h),
+        ));
+      }
+    } else {
+      // Dòng đầu: tìm đúng cụm đang gõ
+      rows.add(ListTile(
+        dense: true,
+        leading: const Icon(Icons.search, color: kFbBlue),
+        title: Text.rich(TextSpan(children: [
+          const TextSpan(text: 'Tìm "'),
+          TextSpan(text: kw, style: const TextStyle(fontWeight: FontWeight.w700)),
+          const TextSpan(text: '"'),
+        ]), maxLines: 1, overflow: TextOverflow.ellipsis),
+        onTap: () => _applyKeyword(kw),
+      ));
+      for (final s in _suggestions) {
+        if (s.type == SuggestionType.department) {
+          rows.add(ListTile(
+            dense: true,
+            leading: const Icon(Icons.apartment_outlined, color: kFbText2),
+            title: _highlighted(s.text, tokens),
+            subtitle: const Text('Lọc theo phòng ban', style: TextStyle(fontSize: 12)),
+            onTap: () => _applyDepartment(s),
+          ));
+        } else {
+          rows.add(ListTile(
+            dense: true,
+            leading: const Icon(Icons.article_outlined, color: kFbText2),
+            title: _highlighted(s.text, tokens),
+            trailing: IconButton(
+              tooltip: 'Điền vào ô tìm kiếm',
+              icon: const Icon(Icons.north_west, size: 18, color: kFbText2),
+              onPressed: () => _fillKeyword(s.text),
+            ),
+            onTap: () => _applyKeyword(s.text),
+          ));
+        }
+      }
+    }
+
+    final panel = TextFieldTapRegion(
+      child: Material(
+        color: Colors.white,
+        elevation: 6,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 360),
+          child: ListView(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            children: rows,
+          ),
+        ),
+      ),
+    );
+
+    // Có AppBar riêng: ô tìm kiếm nằm sát mép trên của body -> đặt ngay mép trên.
+    // Nhúng trong AppShell: bám theo thanh tìm kiếm trong danh sách (cuộn theo).
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: 0,
+      child: widget.embedded
+          ? CompositedTransformFollower(
+              link: _searchLink,
+              showWhenUnlinked: false,
+              targetAnchor: Alignment.bottomLeft,
+              followerAnchor: Alignment.topLeft,
+              child: panel,
+            )
+          : panel,
+    );
+  }
+
+  Future<void> _pickDepartment() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SizedBox(
+        height: MediaQuery.of(ctx).size.height * 0.6,
+        child: Column(children: [
+          const SizedBox(height: 12),
+          const Text('Lọc theo phòng ban',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const Divider(),
+          Expanded(
+            child: ListView(children: [
+              ListTile(
+                leading: const Icon(Icons.apps),
+                title: const Text('Tất cả phòng ban'),
+                selected: _departmentId == null,
+                onTap: () => Navigator.pop(ctx, ''),
+              ),
+              for (final d in _departments)
+                ListTile(
+                  leading: const Icon(Icons.apartment_outlined),
+                  title: Text(d.name),
+                  selected: _departmentId == d.id,
+                  trailing: _departmentId == d.id
+                      ? const Icon(Icons.check, color: kFbBlue)
+                      : null,
+                  onTap: () => Navigator.pop(ctx, d.id),
+                ),
+            ]),
+          ),
+        ]),
+      ),
+    );
+    if (picked == null) return; // đóng sheet mà không chọn
+    setState(() => _departmentId = picked.isEmpty ? null : picked);
+    _reloadFromTop();
+  }
+
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final r = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year, now.month, now.day).add(const Duration(days: 1)),
+      initialDateRange: (_fromDate != null && _toDate != null)
+          ? DateTimeRange(start: _fromDate!, end: _toDate!)
+          : null,
+    );
+    if (r == null) return;
+    setState(() {
+      _fromDate = r.start;
+      _toDate = r.end;
+    });
+    _reloadFromTop();
+  }
+
+  void _clearDate() {
+    setState(() {
+      _fromDate = null;
+      _toDate = null;
+    });
+    _reloadFromTop();
+  }
+
+  void _clearDepartment() {
+    setState(() => _departmentId = null);
+    _reloadFromTop();
+  }
+
+  String _fmt(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  String? get _departmentLabel {
+    for (final d in _departments) {
+      if (d.id == _departmentId) return d.name;
+    }
+    return _departmentId;
+  }
+
+  // ---------------- UI ----------------
 
   @override
   Widget build(BuildContext context) {
@@ -233,6 +633,7 @@ class _ForumPageState extends State<ForumPage> {
       if (widget.embedded) _searchBar(),
       if (widget.onCompose != null) _composer(),
       _sortChips(),
+      _filterBar(),
     ];
 
     final list = RefreshIndicator(
@@ -251,11 +652,16 @@ class _ForumPageState extends State<ForumPage> {
               post: p,
               onReact: (t) => _react(p, t),
               onShowReactors: () => showReactorsSheet(
-                  context, () => widget.service.getPostReactors(p.id)),
+                context,
+                () => widget.service.getPostReactors(p.id),
+                onTapUser: (r) => _showUser(r.userId, r.userName),
+              ),
               onOpen: () => _openDetail(p),
               onReport: (widget.canReport && !_isAdmin) ? () => _reportPost(p) : null,
               reported: _reportedPosts.contains(p.id),
               onToggleHidden: _isAdmin ? () => _toggleHidden(p) : null,
+              onTapAuthor: () => _showUser(p.userId, p.userName),
+              onTapDepartment: () => _showDepartment(p),
             );
           }
           return _footer();
@@ -263,8 +669,14 @@ class _ForumPageState extends State<ForumPage> {
       ),
     );
 
+    // Hộp gợi ý vẽ đè lên danh sách
+    final body = Stack(
+      fit: StackFit.expand,
+      children: [list, _suggestOverlay()],
+    );
+
     if (widget.embedded) {
-      return Container(color: kFbBg, child: list);
+      return Container(color: kFbBg, child: body);
     }
 
     return Scaffold(
@@ -276,8 +688,11 @@ class _ForumPageState extends State<ForumPage> {
         title: _searching
             ? TextField(
                 controller: _searchCtl,
+                focusNode: _searchFocus,
+                onTapOutside: (_) => _hideSuggest(),
                 autofocus: true,
                 textInputAction: TextInputAction.search,
+                onChanged: _onSearchChanged,
                 onSubmitted: _submitSearch,
                 decoration: const InputDecoration(
                   hintText: 'Tìm kiếm bài viết',
@@ -297,21 +712,27 @@ class _ForumPageState extends State<ForumPage> {
           ),
         ],
       ),
-      body: list,
+      body: body,
     );
   }
 
-  Widget _searchBar() => Container(
+  Widget _searchBar() =>
+      CompositedTransformTarget(link: _searchLink, child: _searchBarBody());
+
+  Widget _searchBarBody() => Container(
         color: Colors.white,
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         child: TextField(
           controller: _searchCtl,
+          focusNode: _searchFocus,
+          onTapOutside: (_) => _hideSuggest(),
           textInputAction: TextInputAction.search,
+          onChanged: _onSearchChanged,
           onSubmitted: _submitSearch,
           decoration: InputDecoration(
-            hintText: 'Tìm kiếm bài viết',
+            hintText: 'Tìm kiếm bài viết (gõ từng chữ, không cần dấu)',
             prefixIcon: const Icon(Icons.search, color: kFbText2),
-            suffixIcon: _keyword.isEmpty
+            suffixIcon: _searchCtl.text.isEmpty
                 ? null
                 : IconButton(
                     icon: const Icon(Icons.close, color: kFbText2),
@@ -374,13 +795,59 @@ class _ForumPageState extends State<ForumPage> {
                       ),
                       onSelected: (_) {
                         _sortBy = e.key;
-                        _load(reset: true);
+                        _reloadFromTop();
                       },
                     ),
                   ))
               .toList(),
         ),
       );
+
+  /// Hàng lọc: phòng ban + khoảng ngày (bấm dấu x trên chip để bỏ lọc).
+  Widget _filterBar() {
+    final hasDept = _departmentId != null;
+    final hasDate = _fromDate != null && _toDate != null;
+    const selColor = Color(0xFFE7F3FF);
+    return Container(
+      color: Colors.white,
+      height: 48,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+        children: [
+          InputChip(
+            avatar: Icon(Icons.apartment_outlined,
+                size: 18, color: hasDept ? kFbBlue : Colors.black54),
+            label: Text(hasDept ? (_departmentLabel ?? 'Phòng ban') : 'Phòng ban'),
+            selected: hasDept,
+            showCheckmark: false,
+            selectedColor: selColor,
+            labelStyle: TextStyle(
+                color: hasDept ? kFbBlue : Colors.black87, fontWeight: FontWeight.w600),
+            onPressed: _pickDepartment,
+            onDeleted: hasDept ? _clearDepartment : null,
+          ),
+          const SizedBox(width: 8),
+          InputChip(
+            avatar: Icon(Icons.date_range,
+                size: 18, color: hasDate ? kFbBlue : Colors.black54),
+            label: Text(hasDate
+                ? (_fromDate == _toDate
+                    ? _fmt(_fromDate!)
+                    : '${_fmt(_fromDate!)} – ${_fmt(_toDate!)}')
+                : 'Khoảng ngày'),
+            selected: hasDate,
+            showCheckmark: false,
+            selectedColor: selColor,
+            labelStyle: TextStyle(
+                color: hasDate ? kFbBlue : Colors.black87, fontWeight: FontWeight.w600),
+            onPressed: _pickDateRange,
+            onDeleted: hasDate ? _clearDate : null,
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _footer() {
     if (_loading) {
@@ -398,14 +865,24 @@ class _ForumPageState extends State<ForumPage> {
         ]),
       );
     }
-    if (_posts.isEmpty) {
+    if (_posts.isEmpty && !_hasMore) {
       return Padding(
         padding: const EdgeInsets.all(32),
         child: Center(
           child: Text(
-            _keyword.isEmpty ? 'Chưa có bài viết nào' : 'Không tìm thấy bài viết phù hợp',
+            _hasQuery ? 'Không tìm thấy bài viết phù hợp' : 'Chưa có bài viết nào',
+            textAlign: TextAlign.center,
             style: const TextStyle(color: kFbText2),
           ),
+        ),
+      );
+    }
+    if (_hasMore) {
+      // Dự phòng: tự tải khi cuộn tới gần cuối, nút này dành cho trường hợp không tự tải được
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: Center(
+          child: TextButton(onPressed: () => _load(), child: const Text('Tải thêm bài viết')),
         ),
       );
     }

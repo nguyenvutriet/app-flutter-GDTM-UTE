@@ -20,6 +20,23 @@ class AnnouncementException implements Exception {
   String toString() => message;
 }
 
+/// Một trang thông báo khi tải phân trang (lazy loading).
+class AnnouncementPage {
+  final List<AnnouncementItem> items;
+
+  /// Con trỏ để tải trang kế tiếp (truyền vào startAfter).
+  final DocumentSnapshot? lastDoc;
+
+  /// Còn dữ liệu để tải tiếp hay không.
+  final bool hasMore;
+
+  const AnnouncementPage({
+    required this.items,
+    required this.lastDoc,
+    required this.hasMore,
+  });
+}
+
 class AnnouncementService {
   static const String announcementsCollection = 'announcement';
   static const String attachmentsCollection =
@@ -72,9 +89,58 @@ class AnnouncementService {
     return _build(snap.docs);
   }
 
+  /// Tải thông báo theo từng trang (lazy loading).
+  ///
+  /// - [startAfter]: [AnnouncementPage.lastDoc] của trang trước (null = trang đầu).
+  /// - [from] / [to]: lọc khoảng thời gian ngay trên Firestore ([from] <= date < [to]).
+  ///   Lọc và sắp xếp cùng trường 'date' nên không cần composite index.
+  /// - [descending]: true = mới nhất trước.
+  Future<AnnouncementPage> getAnnouncementsPage({
+    int limit = 15,
+    DocumentSnapshot? startAfter,
+    DateTime? from,
+    DateTime? to,
+    bool descending = true,
+  }) async {
+    _uid;
+    Query<Map<String, dynamic>> q = _db.collection(announcementsCollection);
+    if (from != null) {
+      q = q.where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(from));
+    }
+    if (to != null) {
+      q = q.where('date', isLessThan: Timestamp.fromDate(to));
+    }
+    q = q.orderBy('date', descending: descending);
+    if (startAfter != null) {
+      q = q.startAfterDocument(startAfter);
+    }
+
+    final snap = await q.limit(limit).get();
+    final items = await _build(snap.docs);
+    return AnnouncementPage(
+      items: items,
+      lastDoc: snap.docs.isEmpty ? null : snap.docs.last,
+      hasMore: snap.docs.length >= limit,
+    );
+  }
+
   /// Toàn bộ thông báo announcement dành cho sinh viên xem.
   Future<List<AnnouncementItem>> getDepartmentAnnouncements({int limit = 50}) {
     return getAnnouncements(limit: limit);
+  }
+
+  /// Toàn bộ phòng ban trong CSDL (bỏ phòng ban bị tắt isActive == false
+  /// và phòng ban không có tên), sắp xếp theo tên.
+  Future<List<Department>> getAllDepartments() async {
+    _uid;
+    final snap = await _db.collection(departmentsCollection).get();
+    final list = snap.docs
+        .map((d) => Department.fromFirestore(d))
+        .where((d) => d.isActive != false)
+        .where((d) => (d.name ?? '').trim().isNotEmpty)
+        .toList();
+    list.sort((a, b) => a.name!.trim().compareTo(b.name!.trim()));
+    return list;
   }
 
   /// Thông báo do người đang đăng nhập đăng (cho trang quản lý).

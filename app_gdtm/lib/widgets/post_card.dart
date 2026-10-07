@@ -32,6 +32,12 @@ class PostCard extends StatelessWidget {
   /// Chỉ admin: ẩn / hiện lại bài viết. Khác null thì menu có "Ẩn bài viết" / "Hiện lại".
   final VoidCallback? onToggleHidden;
 
+  /// Chạm avatar / tên tác giả -> card thông tin người dùng
+  final VoidCallback? onTapAuthor;
+
+  /// Chạm tên phòng ban -> card thông tin phòng ban
+  final VoidCallback? onTapDepartment;
+
   const PostCard({
     super.key,
     required this.post,
@@ -43,6 +49,8 @@ class PostCard extends StatelessWidget {
     this.onReport,
     this.reported = false,
     this.onToggleHidden,
+    this.onTapAuthor,
+    this.onTapDepartment,
   });
 
   bool _isImage(AttachmentDTO a) {
@@ -162,17 +170,23 @@ class PostCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 4, 0),
             child: Row(children: [
-              InitialAvatar(name: post.userName, radius: 20),
+              GestureDetector(
+                onTap: onTapAuthor,
+                child: InitialAvatar(name: post.userName, radius: 20),
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(children: [
                     Flexible(
-                      child: Text(post.userName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 15)),
+                      child: GestureDetector(
+                        onTap: onTapAuthor,
+                        child: Text(post.userName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15)),
+                      ),
                     ),
                     if (post.isHidden) ...[
                       const SizedBox(width: 6),
@@ -197,13 +211,22 @@ class PostCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Row(children: [
                     Flexible(
-                      child: Text(
-                        '${post.departmentName} · ${timeAgo(post.date)} · ',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: kFbText2, fontSize: 12.5),
+                      child: GestureDetector(
+                        onTap: onTapDepartment,
+                        child: Text(
+                          post.departmentName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: kFbText2,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ),
+                    Text(' · ${timeAgo(post.date)} · ',
+                        maxLines: 1,
+                        style: const TextStyle(color: kFbText2, fontSize: 12.5)),
                     const Icon(Icons.public, size: 13, color: kFbText2),
                   ]),
                 ]),

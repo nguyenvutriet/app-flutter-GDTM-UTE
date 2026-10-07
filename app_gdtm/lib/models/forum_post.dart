@@ -123,7 +123,13 @@ class ForumPostDTO {
   final String description;
   final String? status;
   final DateTime? date;
+
+  /// Id phòng ban (để mở card phòng ban / lọc theo phòng ban)
+  final String departmentId;
   final String departmentName;
+
+  /// Id tác giả (để mở card thông tin người dùng)
+  final String userId;
   final String userName;
   final List<String> categories;
   final int commentCount;
@@ -140,7 +146,9 @@ class ForumPostDTO {
     required this.description,
     this.status,
     this.date,
+    this.departmentId = '',
     this.departmentName = 'N/A',
+    this.userId = '',
     this.userName = 'Ẩn danh',
     this.categories = const [],
     this.commentCount = 0,
@@ -172,7 +180,7 @@ class ForumPostDTO {
     Map<String, int>? reactions,
     int? commentCount,
     List<CommentDTO>? comments,
-    bool ? isHidden,
+    bool? isHidden,
   }) =>
       ForumPostDTO(
         id: id,
@@ -180,7 +188,9 @@ class ForumPostDTO {
         description: description,
         status: status,
         date: date,
+        departmentId: departmentId,
         departmentName: departmentName,
+        userId: userId,
         userName: userName,
         categories: categories,
         commentCount: commentCount ?? this.commentCount,

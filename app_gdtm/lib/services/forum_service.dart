@@ -3,6 +3,9 @@
 // getPublicSearchPosts / votePost + bình luận (thêm, trả lời, xóa, reaction) sang Firestore.
 // Giữ nguyên schema phẳng hiện có: requests, comments, votes, votecomments...
 // Mọi hàm đều yêu cầu đăng nhập.
+//
+// Bổ sung: tìm kiếm từng chữ (không phân biệt dấu), lọc theo phòng ban / khoảng ngày,
+// phân trang cursor khi tìm + lọc, và dữ liệu cho card thông tin người dùng / phòng ban.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
@@ -18,6 +21,84 @@ class ForumException implements Exception {
   @override
   String toString() => message;
 }
+
+/// Thông tin người dùng để hiện trên card (KHÔNG chứa password).
+class UserInfo {
+  final String id;
+  final String fullName;
+  final String email;
+  final String role;
+  final String? departmentId;
+  final String? departmentName;
+  UserInfo({
+    required this.id,
+    required this.fullName,
+    required this.email,
+    required this.role,
+    this.departmentId,
+    this.departmentName,
+  });
+}
+
+/// Thông tin phòng ban (dùng cho bộ lọc và card).
+class DepartmentInfo {
+  final String id;
+  final String name;
+
+  /// Các dòng chi tiết (nhãn tiếng Việt -> giá trị), chỉ gồm trường có dữ liệu.
+  final List<MapEntry<String, String>> details;
+  DepartmentInfo({required this.id, required this.name, this.details = const []});
+}
+
+enum SuggestionType { post, department }
+
+/// Một dòng trong hộp gợi ý tìm kiếm.
+class SearchSuggestion {
+  final SuggestionType type;
+  final String text;
+
+  /// Chỉ có với gợi ý phòng ban
+  final String? departmentId;
+
+  const SearchSuggestion.post(this.text)
+      : type = SuggestionType.post,
+        departmentId = null;
+
+  const SearchSuggestion.department(this.text, this.departmentId)
+      : type = SuggestionType.department;
+}
+
+class _SuggestItem {
+  final String text;
+  final String folded;
+  const _SuggestItem(this.text, this.folded);
+}
+
+/// Bỏ dấu tiếng Việt + về chữ thường: "Phòng Đào Tạo" -> "phong dao tao".
+String foldVi(String input) {
+  var s = input.toLowerCase();
+  // Dạng tổ hợp (NFD): bỏ dấu kết hợp
+  s = s.replaceAll(RegExp(r'[\u0300-\u036f]'), '');
+  const groups = {
+    'a': 'àáạảãâầấậẩẫăằắặẳẵ',
+    'e': 'èéẹẻẽêềếệểễ',
+    'i': 'ìíịỉĩ',
+    'o': 'òóọỏõôồốộổỗơờớợởỡ',
+    'u': 'ùúụủũưừứựửữ',
+    'y': 'ỳýỵỷỹ',
+    'd': 'đ',
+  };
+  groups.forEach((plain, accented) {
+    for (final ch in accented.split('')) {
+      s = s.replaceAll(ch, plain);
+    }
+  });
+  return s;
+}
+
+/// "tư vấn  học bổng" -> ['tu', 'van', 'hoc', 'bong'] (kiểu Google: tách từng chữ).
+List<String> searchTokens(String keyword) =>
+    foldVi(keyword).split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
 
 class ForumService {
   // ------------------------------------------------------------
@@ -71,31 +152,68 @@ class ForumService {
   Map<String, String>? _departmentNames;
   Map<String, String>? _categoryNames;
 
+  // Cache thông tin người dùng (tìm kiếm / card không phải đọc lại nhiều lần)
+  final Map<String, Map<String, dynamic>> _userCache = {};
+
+  // Gợi ý tìm kiếm: lịch sử (trong phiên) + kho tiêu đề bài viết (cache 5 phút)
+  final List<String> recentSearches = [];
+  List<_SuggestItem>? _suggestPool;
+  DateTime? _suggestPoolAt;
+
   // ==================================================================
   // BÀI VIẾT
   // ==================================================================
 
-  /// getPublicPosts + sắp xếp (Strategy).
-  /// Cần composite index: postStatus (asc) + timeCreate (desc) — Firestore sẽ in link tạo index.
+  /// getPublicPosts + sắp xếp + tìm kiếm từng chữ + lọc phòng ban / khoảng ngày.
+  ///
+  /// - Lọc phòng ban và ngày chạy phía server. Cần composite index (Firestore sẽ in link tạo):
+  ///   postStatus (asc) + departmentId (asc) + timeCreate (desc).
+  /// - Tìm kiếm: quét theo lô, lọc phía client, vẫn phân trang bằng cursor
+  ///   nên cuộn vô hạn hoạt động cả khi đang tìm kiếm.
+  /// - "Cũ nhất" / "Mới nhất" sắp xếp phía server (đúng trên toàn bộ dữ liệu);
+  ///   "Nhiều tương tác" / "Nhiều bình luận" sắp xếp trong từng trang đã tải.
   Future<PostPage> getPublicPosts({
     DocumentSnapshot<Map<String, dynamic>>? startAfter,
     int limit = 10,
     String sortBy = 'newest',
+    String keyword = '',
+    String? departmentId,
+    DateTime? fromDate,
+    DateTime? toDate,
   }) async {
     final uid = _uid;
     final admin = await isAdmin();
+    final tokens = searchTokens(keyword);
+    final searching = tokens.isNotEmpty;
+    if (searching) await _ensureLookups();
 
-    // Bài bị ẩn bị loại ở phía client; lấy tiếp trang kế để vẫn đủ số bài mỗi lần tải.
+    final batchSize = searching ? 40 : limit;
+    final maxRounds = searching ? 8 : 5;
+
+    // Bài bị ẩn / không khớp từ khóa bị loại ở phía client;
+    // lấy tiếp lô kế để vẫn đủ số bài mỗi lần tải.
     DocumentSnapshot<Map<String, dynamic>>? cursor = startAfter;
     final visible = <DocumentSnapshot<Map<String, dynamic>>>[];
     var hasMore = true;
     var rounds = 0;
-    while (visible.length < limit && hasMore && rounds++ < 5) {
+
+    while (visible.length < limit && hasMore && rounds++ < maxRounds) {
       Query<Map<String, dynamic>> q = _db
           .collection(requestsCollection)
-          .where('postStatus', isEqualTo: RequestService.postStatusPublic)
-          .orderBy('timeCreate', descending: true)
-          .limit(limit);
+          .where('postStatus', isEqualTo: RequestService.postStatusPublic);
+      if (departmentId != null && departmentId.isNotEmpty) {
+        q = q.where('departmentId', isEqualTo: departmentId);
+      }
+      if (fromDate != null) {
+        final start = DateTime(fromDate.year, fromDate.month, fromDate.day);
+        q = q.where('timeCreate', isGreaterThanOrEqualTo: Timestamp.fromDate(start));
+      }
+      if (toDate != null) {
+        final end =
+            DateTime(toDate.year, toDate.month, toDate.day).add(const Duration(days: 1));
+        q = q.where('timeCreate', isLessThan: Timestamp.fromDate(end));
+      }
+      q = q.orderBy('timeCreate', descending: sortBy != 'oldest').limit(batchSize);
       if (cursor != null) q = q.startAfterDocument(cursor);
 
       final snap = await q.get();
@@ -104,12 +222,40 @@ class ForumService {
         break;
       }
       cursor = snap.docs.last;
-      hasMore = snap.docs.length == limit;
-      visible.addAll(snap.docs.where((d) => admin || !_isHidden(d.data())));
+      hasMore = snap.docs.length == batchSize;
+
+      var docs = snap.docs.where((d) => admin || !_isHidden(d.data())).toList();
+      if (searching) docs = await _filterByKeyword(docs, tokens);
+      visible.addAll(docs);
     }
 
     final posts = await _buildPosts(visible, uid);
     return PostPage(posts: _sort(sortBy, posts), lastDoc: cursor, hasMore: hasMore);
+  }
+
+  /// Mọi chữ trong từ khóa đều phải xuất hiện (không phân biệt hoa/thường, dấu)
+  /// trong: tiêu đề, nội dung, chuyên mục, phòng ban, tên tác giả.
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _filterByKeyword(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    List<String> tokens,
+  ) async {
+    if (docs.isEmpty) return docs;
+    final users = await _loadUsers(
+        docs.map((d) => d.data()['userId']).whereType<String>().toSet());
+    return docs.where((d) {
+      final m = d.data();
+      final cats = (m['categoryIds'] as List? ?? [])
+          .map((id) => _categoryNames![id.toString()] ?? '')
+          .join(' ');
+      final hay = foldVi([
+        m['subject']?.toString() ?? '',
+        m['description']?.toString() ?? '',
+        cats,
+        _departmentNames![m['departmentId']] ?? '',
+        _userName(users[m['userId']]),
+      ].join(' '));
+      return tokens.every(hay.contains);
+    }).toList();
   }
 
   /// getPostDetail (kèm cây bình luận) — null nếu không tồn tại.
@@ -146,17 +292,19 @@ class ForumService {
     return _sort(sortBy, posts);
   }
 
-  /// getPublicSearchPosts. Firestore không có full-text search nên lọc phía client
-  /// trên [scanLimit] bài mới nhất.
+  /// getPublicSearchPosts (bản cũ, không phân trang). Diễn đàn giờ dùng
+  /// [getPublicPosts] với tham số keyword; giữ lại phòng khi nơi khác còn gọi.
+  /// Firestore không có full-text search nên lọc phía client trên [scanLimit] bài mới nhất.
   Future<List<ForumPostDTO>> searchPublicPosts(
     String keyword, {
     String sortBy = 'newest',
     int scanLimit = 200,
   }) async {
     final uid = _uid;
-    final kw = keyword.trim().toLowerCase();
+    final tokens = searchTokens(keyword);
     final admin = await isAdmin();
-    if (kw.isEmpty) return [];
+    if (tokens.isEmpty) return [];
+    await _ensureLookups();
 
     final snap = await _db
         .collection(requestsCollection)
@@ -165,13 +313,8 @@ class ForumService {
         .limit(scanLimit)
         .get();
 
-    final matched = snap.docs.where((d) {
-      final m = d.data();
-      if (!admin && _isHidden(m)) return false;
-      return (m['subject']?.toString() ?? '').toLowerCase().contains(kw) ||
-          (m['description']?.toString() ?? '').toLowerCase().contains(kw);
-    }).toList();
-
+    final docs = snap.docs.where((d) => admin || !_isHidden(d.data())).toList();
+    final matched = await _filterByKeyword(docs, tokens);
     return _sort(sortBy, await _buildPosts(matched, uid));
   }
 
@@ -199,6 +342,153 @@ class ForumService {
       counts: countReactions(snap.docs.map((d) => d.data()['reactionType'])),
       currentType: current,
     );
+  }
+
+  // ==================================================================
+  // PHÒNG BAN / NGƯỜI DÙNG (bộ lọc + card thông tin)
+  // ==================================================================
+
+  /// Danh sách phòng ban cho bộ lọc (sắp theo tên, không phân biệt dấu).
+  Future<List<DepartmentInfo>> getDepartments() async {
+    _uid; // bắt buộc đăng nhập
+    await _ensureLookups();
+    final list = _departmentNames!.entries
+        .where((e) => e.value.trim().isNotEmpty)
+        .map((e) => DepartmentInfo(id: e.key, name: e.value))
+        .toList()
+      ..sort((a, b) => foldVi(a.name).compareTo(foldVi(b.name)));
+    return list;
+  }
+
+  /// Thông tin chi tiết một phòng ban cho card.
+  Future<DepartmentInfo?> getDepartmentInfo(String departmentId) async {
+    _uid;
+    if (departmentId.trim().isEmpty) return null;
+    final doc = await _db.collection(departmentsCollection).doc(departmentId).get();
+    if (!doc.exists) return null;
+    final m = doc.data() ?? {};
+
+    // Chỉnh các key bên phải cho khớp field thật trên Firestore của bạn
+    const fields = <String, List<String>>{
+      'Mô tả': ['description', 'desc'],
+      'Email': ['email'],
+      'Điện thoại': ['phone', 'phoneNumber', 'hotline'],
+      'Địa chỉ': ['address', 'location'],
+      'Trưởng phòng': ['head', 'headName', 'manager'],
+    };
+    final details = <MapEntry<String, String>>[];
+    fields.forEach((label, keys) {
+      for (final k in keys) {
+        final v = m[k]?.toString().trim() ?? '';
+        if (v.isNotEmpty) {
+          details.add(MapEntry(label, v));
+          break;
+        }
+      }
+    });
+    return DepartmentInfo(
+      id: doc.id,
+      name: (m['name'] ?? m['departmentName'] ?? '').toString(),
+      details: details,
+    );
+  }
+
+  /// Thông tin người dùng cho card: id, họ tên, email, vai trò, phòng ban.
+  /// Không trả về password.
+  Future<UserInfo?> getUserInfo(String userId) async {
+    _uid;
+    if (userId.trim().isEmpty) return null;
+    final u = (await _loadUsers({userId}))[userId];
+    if (u == null) return null;
+    await _ensureLookups();
+    final depId = u['departmentId']?.toString();
+    return UserInfo(
+      id: u['id']?.toString() ?? userId,
+      fullName: _userName(u),
+      email: u['email']?.toString() ?? '',
+      role: _userRole(u),
+      departmentId: depId,
+      departmentName:
+          (depId == null || depId.isEmpty) ? null : _departmentNames![depId],
+    );
+  }
+
+  // ==================================================================
+  // GỢI Ý TÌM KIẾM
+  // ==================================================================
+
+  void addRecentSearch(String keyword) {
+    final k = keyword.trim();
+    if (k.isEmpty) return;
+    final f = foldVi(k);
+    recentSearches.removeWhere((e) => foldVi(e) == f);
+    recentSearches.insert(0, k);
+    if (recentSearches.length > 8) recentSearches.removeLast();
+  }
+
+  void removeRecentSearch(String keyword) => recentSearches.remove(keyword);
+
+  void clearRecentSearches() => recentSearches.clear();
+
+  /// Kho tiêu đề của 300 bài công khai mới nhất, cache 5 phút
+  /// (chỉ tốn 1 lượt đọc 300 document mỗi 5 phút, không đọc lại mỗi lần gõ).
+  Future<List<_SuggestItem>> _loadSuggestPool() async {
+    final at = _suggestPoolAt;
+    final cached = _suggestPool;
+    if (cached != null &&
+        at != null &&
+        DateTime.now().difference(at) < const Duration(minutes: 5)) {
+      return cached;
+    }
+    final admin = await isAdmin();
+    final snap = await _db
+        .collection(requestsCollection)
+        .where('postStatus', isEqualTo: RequestService.postStatusPublic)
+        .orderBy('timeCreate', descending: true)
+        .limit(300)
+        .get();
+
+    final seen = <String>{};
+    final pool = <_SuggestItem>[];
+    for (final d in snap.docs) {
+      final m = d.data();
+      if (!admin && _isHidden(m)) continue;
+      final subject = (m['subject']?.toString() ?? '').trim();
+      if (subject.isEmpty) continue;
+      final folded = foldVi(subject);
+      if (seen.add(folded)) pool.add(_SuggestItem(subject, folded));
+    }
+    _suggestPool = pool;
+    _suggestPoolAt = DateTime.now();
+    return pool;
+  }
+
+  /// Gợi ý khi gõ: tiêu đề bài viết khớp (ưu tiên tiêu đề bắt đầu bằng chữ đầu tiên,
+  /// còn lại giữ thứ tự mới → cũ) + tối đa 2 phòng ban khớp tên.
+  Future<List<SearchSuggestion>> getSuggestions(String keyword, {int limit = 6}) async {
+    _uid; // bắt buộc đăng nhập
+    final tokens = searchTokens(keyword);
+    if (tokens.isEmpty) return [];
+    await _ensureLookups();
+    final pool = await _loadSuggestPool();
+
+    final first = tokens.first;
+    final matched = pool.where((p) => tokens.every(p.folded.contains)).toList();
+    final starts = matched.where((p) => p.folded.startsWith(first));
+    final rest = matched.where((p) => !p.folded.startsWith(first));
+
+    final out = <SearchSuggestion>[
+      for (final p in [...starts, ...rest].take(limit)) SearchSuggestion.post(p.text),
+    ];
+
+    final deps = _departmentNames!.entries
+        .where((e) =>
+            e.value.trim().isNotEmpty && tokens.every(foldVi(e.value).contains))
+        .take(2);
+    for (final e in deps) {
+      out.add(SearchSuggestion.department(e.value, e.key));
+    }
+    return out;
   }
 
   // ==================================================================
@@ -646,7 +936,9 @@ class ForumService {
         description: m['description']?.toString() ?? '',
         status: m['currentStatus']?.toString(),
         date: (m['timeCreate'] as Timestamp?)?.toDate(),
+        departmentId: m['departmentId']?.toString() ?? '',
         departmentName: _departmentNames![m['departmentId']] ?? 'N/A',
+        userId: m['userId']?.toString() ?? '',
         userName: _userName(users[m['userId']]),
         categories: (m['categoryIds'] as List? ?? [])
             .map((id) => _categoryNames![id.toString()] ?? id.toString())
@@ -767,11 +1059,19 @@ class ForumService {
     return map;
   }
 
-  /// Tải thông tin người dùng theo Users.id.
+  /// Tải thông tin người dùng theo Users.id (có cache trong phiên).
   /// Hỗ trợ cả hai kiểu lưu: doc id = Users.id, hoặc doc id bất kỳ + field 'id' = Users.id.
   Future<Map<String, Map<String, dynamic>>> _loadUsers(Set<String> ids) async {
     final out = <String, Map<String, dynamic>>{};
-    final list = ids.where((e) => e.trim().isNotEmpty).toList();
+    final list = <String>[];
+    for (final id in ids.where((e) => e.trim().isNotEmpty)) {
+      final cached = _userCache[id];
+      if (cached != null) {
+        out[id] = cached;
+      } else {
+        list.add(id);
+      }
+    }
     for (var i = 0; i < list.length; i += _whereInLimit) {
       final chunk = list.sublist(i, i + _whereInLimit > list.length ? list.length : i + _whereInLimit);
       final byDocId = _db
@@ -788,6 +1088,10 @@ class ForumService {
         final key = d.data()['id']?.toString();
         if (key != null) out.putIfAbsent(key, () => d.data());
       }
+    }
+    for (final id in list) {
+      final u = out[id];
+      if (u != null) _userCache[id] = u;
     }
     return out;
   }

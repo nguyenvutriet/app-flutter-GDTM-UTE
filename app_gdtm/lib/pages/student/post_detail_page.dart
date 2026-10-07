@@ -6,6 +6,7 @@ import 'package:app_gdtm/models/forum_post.dart';
 import 'package:app_gdtm/services/forum_service.dart';
 import 'package:app_gdtm/widgets/comment_tile.dart';
 import 'package:app_gdtm/widgets/forum_utils.dart';
+import 'package:app_gdtm/widgets/info_cards.dart';
 import 'package:app_gdtm/widgets/post_card.dart';
 import 'package:app_gdtm/widgets/reactors_sheet.dart';
 import 'package:app_gdtm/widgets/report_comment_dialog.dart';
@@ -82,6 +83,18 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   int _total(List<CommentDTO> list) =>
       list.fold(0, (sum, c) => sum + 1 + c.replies.length);
+
+  // ---------------- Card thông tin ----------------
+
+  void _showUser(String userId, String name) =>
+      showUserCard(context, widget.service, userId, fallbackName: name);
+
+  void _showDepartment() => showDepartmentCard(
+        context,
+        widget.service,
+        _post.departmentId,
+        fallbackName: _post.departmentName,
+      );
 
   Future<void> _refresh() async {
     try {
@@ -200,7 +213,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
     if (reported && mounted) setState(() => _reported.add(c.id));
   }
 
-    Future<void> _reportPost() async {
+  Future<void> _reportPost() async {
     final ok = await showReportPostDialog(context, service: widget.service, post: _post);
     if (ok && mounted) setState(() => _postReported = true);
   }
@@ -317,11 +330,16 @@ class _PostDetailPageState extends State<PostDetailPage> {
               expanded: true,
               onReact: _reactPost,
               onShowReactors: () => showReactorsSheet(
-                  context, () => widget.service.getPostReactors(_post.id)),
+                context,
+                () => widget.service.getPostReactors(_post.id),
+                onTapUser: (r) => _showUser(r.userId, r.userName),
+              ),
               onTapComments: () => _focus.requestFocus(),
               onReport: (widget.canReport && !_isAdmin) ? _reportPost : null,
               reported: _postReported,
               onToggleHidden: _isAdmin ? _toggleHiddenPost : null,
+              onTapAuthor: () => _showUser(_post.userId, _post.userName),
+              onTapDepartment: _showDepartment,
             ),
             Container(
               color: Colors.white,
@@ -365,14 +383,18 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         onReact: _reactComment,
                         onReply: _startReply,
                         onDelete: _deleteComment,
+                        onTapUser: (c) => _showUser(c.userId, c.userName),
                         onReport: (widget.canReport && !_isAdmin) ? _reportComment : null,
                         reportedIds: _reported,
                         onToggleHidden: (_isAdmin && !_post.isHidden) ? _toggleHidden : null,
-                        parentHidden: _post.isHidden,                        
+                        parentHidden: _post.isHidden,
                         highlightId: widget.focusCommentId,
                         anchors: _anchors,
                         onShowReactors: (c) => showReactorsSheet(
-                            context, () => widget.service.getCommentReactors(c.id)),
+                          context,
+                          () => widget.service.getCommentReactors(c.id),
+                          onTapUser: (r) => _showUser(r.userId, r.userName),
+                        ),
                       )),
               ]),
             ),
