@@ -1,6 +1,7 @@
 // lib/widgets/comment_tile.dart
 // Bình luận kiểu Facebook: bong bóng xám, Thích · Phản hồi · ⋯ (menu: báo cáo / ẩn / xóa), reply thụt lề.
 // Link bài viết trong nội dung hiện thành thẻ xem trước (PostLinkCard).
+// Chạm avatar / tên người bình luận -> card thông tin (onTapUser).
 import 'package:flutter/material.dart';
 import 'package:app_gdtm/models/forum_post.dart';
 import 'forum_utils.dart';
@@ -14,6 +15,9 @@ class CommentTile extends StatelessWidget {
   final ValueChanged<CommentDTO> onReply;
   final ValueChanged<CommentDTO> onDelete;
   final ValueChanged<CommentDTO>? onShowReactors;
+
+  /// Chạm avatar / tên -> card thông tin người dùng
+  final ValueChanged<CommentDTO>? onTapUser;
 
   /// Null thì ẩn nút "Báo cáo". Chỉ hiện ở bình luận của người khác.
   final ValueChanged<CommentDTO>? onReport;
@@ -40,6 +44,7 @@ class CommentTile extends StatelessWidget {
     required this.onReply,
     required this.onDelete,
     this.onShowReactors,
+    this.onTapUser,
     this.onReport,
     this.reportedIds,
     this.onToggleHidden,
@@ -116,9 +121,8 @@ class CommentTile extends StatelessWidget {
         c.isReply && c.replyToUsername != null && c.replyId != c.parentId;
 
     // Admin = đỏ, giảng viên = xanh
-    final Color? roleColor = c.isAdmin
-        ? const Color(0xFFD32F2F)
-        : (c.isTeacher ? kFbBlue : null);
+    final Color? roleColor =
+        c.isAdmin ? const Color(0xFFD32F2F) : (c.isTeacher ? kFbBlue : null);
     final bool isFocus = highlightId != null && highlightId == c.id;
     // Bình luận bị ẩn (chỉ admin nhận được) hiển thị mờ
     final bool dim = c.isHidden || parentHidden;
@@ -130,134 +134,153 @@ class CommentTile extends StatelessWidget {
     final String? roleLabel =
         c.isAdmin ? 'Quản trị viên' : (c.isTeacher ? 'Giảng viên' : null);
 
+    void tapUser() => onTapUser?.call(c);
+
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       KeyedSubtree(
         key: anchors?.putIfAbsent(c.id, () => GlobalKey()),
         child: Opacity(
-        opacity: dim ? 0.45 : 1.0,
-        child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          InitialAvatar(name: c.userName, radius: isReply ? 14 : 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          opacity: dim ? 0.45 : 1.0,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               GestureDetector(
-                onLongPress: _hasActions ? () => _showActions(context) : null,
-                child: Align(
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: bubbleColor,
-                    borderRadius: BorderRadius.circular(18),
+                onTap: onTapUser == null ? null : tapUser,
+                child: InitialAvatar(name: c.userName, radius: isReply ? 14 : 18),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  GestureDetector(
+                    onLongPress: _hasActions ? () => _showActions(context) : null,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: bubbleColor,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(mainAxisSize: MainAxisSize.min, children: [
+                                Flexible(
+                                  child: GestureDetector(
+                                    onTap: onTapUser == null ? null : tapUser,
+                                    child: Text(c.userName,
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 13,
+                                            color: roleColor)),
+                                  ),
+                                ),
+                                if (c.isVerified) ...[
+                                  const SizedBox(width: 4),
+                                  Icon(Icons.verified,
+                                      size: 14, color: roleColor ?? kFbBlue),
+                                ],
+                                if (roleLabel != null) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: roleColor,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(roleLabel,
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600)),
+                                  ),
+                                ],
+                                if (c.isHidden) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black54,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.visibility_off,
+                                              size: 10, color: Colors.white),
+                                          SizedBox(width: 3),
+                                          Text('Đã ẩn',
+                                              style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w600)),
+                                        ]),
+                                  ),
+                                ],
+                              ]),
+                              const SizedBox(height: 2),
+                              // Nội dung: link bài viết hiện thành thẻ xem trước
+                              LinkifiedContent(
+                                text: c.content,
+                                prefix: showMention ? '${c.replyToUsername} ' : null,
+                                style: const TextStyle(fontSize: 14.5, height: 1.3),
+                              ),
+                            ]),
+                      ),
+                    ),
                   ),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(mainAxisSize: MainAxisSize.min, children: [
-                      Flexible(
-                        child: Text(c.userName,
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                                color: roleColor)),
-                      ),
-                      if (c.isVerified) ...[
-                        const SizedBox(width: 4),
-                        Icon(Icons.verified, size: 14, color: roleColor ?? kFbBlue),
-                      ],
-                      if (roleLabel != null) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: roleColor,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(roleLabel,
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600)),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, top: 2),
+                    child: Wrap(
+                      spacing: 14,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(timeAgo(c.date),
+                            style: const TextStyle(fontSize: 12, color: kFbText2)),
+                        ReactionButton(
+                          compact: true,
+                          current: c.reactionType,
+                          onReact: (t) => onReact(c, t),
                         ),
-                      ],
-                      if (c.isHidden) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(Icons.visibility_off, size: 10, color: Colors.white),
-                            SizedBox(width: 3),
-                            Text('Đã ẩn',
+                        GestureDetector(
+                          onTap: () => onReply(c),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 4),
+                            child: Text('Phản hồi',
                                 style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600)),
-                          ]),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: kFbText2)),
+                          ),
+                        ),
+                        // Các thao tác phụ (báo cáo / ẩn / xóa) gom vào menu ⋯
+                        if (_hasActions)
+                          GestureDetector(
+                            onTap: () => _showActions(context),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                              child: Icon(Icons.more_horiz, size: 18, color: kFbText2),
+                            ),
+                          ),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: onShowReactors == null ? null : () => onShowReactors!(c),
+                          child: ReactionSummary(
+                            emojis: topReactionEmojis(c.reactions),
+                            total: c.totalReactions,
+                          ),
                         ),
                       ],
-                    ]),
-                    const SizedBox(height: 2),
-                    // Nội dung: link bài viết hiện thành thẻ xem trước
-                    LinkifiedContent(
-                      text: c.content,
-                      prefix: showMention ? '${c.replyToUsername} ' : null,
-                      style: const TextStyle(fontSize: 14.5, height: 1.3),
                     ),
-                  ]),
-                ),
-              )),
-              Padding(
-                padding: const EdgeInsets.only(left: 12, top: 2),
-                child: Wrap(
-                  spacing: 14,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(timeAgo(c.date),
-                        style: const TextStyle(fontSize: 12, color: kFbText2)),
-                    ReactionButton(
-                      compact: true,
-                      current: c.reactionType,
-                      onReact: (t) => onReact(c, t),
-                    ),
-                    GestureDetector(
-                      onTap: () => onReply(c),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 4),
-                        child: Text('Phản hồi',
-                            style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: kFbText2)),
-                      ),
-                    ),
-                    // Các thao tác phụ (báo cáo / ẩn / xóa) gom vào menu ⋯
-                    if (_hasActions)
-                      GestureDetector(
-                        onTap: () => _showActions(context),
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                          child: Icon(Icons.more_horiz, size: 18, color: kFbText2),
-                        ),
-                      ),
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onShowReactors == null ? null : () => onShowReactors!(c),
-                      child: ReactionSummary(
-                        emojis: topReactionEmojis(c.reactions),
-                        total: c.totalReactions,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ]),
               ),
             ]),
           ),
-        ]),
-      ))),
+        ),
+      ),
       if (c.replies.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(left: 44),
@@ -270,6 +293,7 @@ class CommentTile extends StatelessWidget {
                       onReply: onReply,
                       onDelete: onDelete,
                       onShowReactors: onShowReactors,
+                      onTapUser: onTapUser,
                       onReport: onReport,
                       reportedIds: reportedIds,
                       onToggleHidden: onToggleHidden,
