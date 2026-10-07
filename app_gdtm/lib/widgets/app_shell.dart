@@ -24,6 +24,8 @@ class AppShell extends StatefulWidget {
   final Widget child;
   final ValueChanged<app_notification.Notification>? onNotificationSelected;
   final ValueNotifier<app_notification.Notification?>? notificationReadNotifier;
+    /// Chuông thông báo tùy chỉnh (admin). Null = dùng chuông mặc định.
+  final Widget? notificationBell;
 
   /// Người dùng đang đăng nhập.
   final Users user;
@@ -38,6 +40,7 @@ class AppShell extends StatefulWidget {
     required this.user,
     this.onNotificationSelected,
     this.notificationReadNotifier,
+    this.notificationBell,
   });
 
   static const double desktopBreakpoint = 900;
@@ -214,6 +217,7 @@ class _AppShellState extends State<AppShell> {
                       user: widget.user,
                       notificationCount: _notificationCount,
                       unreadNotifications: _unreadNotifications,
+                      notificationBell: widget.notificationBell,
                       onNotificationSelected:
                           widget.onNotificationSelected == null
                           ? null
@@ -283,6 +287,7 @@ class AppHeader extends StatelessWidget {
   final Users user;
   final List<app_notification.Notification> unreadNotifications;
   final ValueChanged<app_notification.Notification>? onNotificationSelected;
+  final Widget? notificationBell;
 
   const AppHeader({
     super.key,
@@ -291,6 +296,7 @@ class AppHeader extends StatelessWidget {
     this.unreadNotifications = const [],
     this.onNotificationSelected,
     this.notificationCount = 0,
+    this.notificationBell,
   });
 
   @override
@@ -345,6 +351,7 @@ class AppHeader extends StatelessWidget {
                 // ==================================================
                 // THÔNG BÁO
                 // ==================================================
+                notificationBell ??
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
