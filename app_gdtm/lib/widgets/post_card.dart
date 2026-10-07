@@ -38,6 +38,8 @@ class PostCard extends StatelessWidget {
   /// Chạm tên phòng ban -> card thông tin phòng ban
   final VoidCallback? onTapDepartment;
 
+  
+
   const PostCard({
     super.key,
     required this.post,
@@ -154,8 +156,61 @@ class PostCard extends StatelessWidget {
     );
   }
 
+  void _showImageViewer(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(10),
+          child: Stack(
+            children: [
+              Center(
+                child: InteractiveViewer(
+                  minScale: 0.5,
+                  maxScale: 5.0,
+                  panEnabled: true,
+                  scaleEnabled: true,
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.broken_image,
+                      color: Colors.white,
+                      size: 60,
+                    ),
+                  ),
+                ),
+              ),
+
+              Positioned(
+                top: 0,
+                right: 0,
+                child: IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(
+                    Icons.close,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth >= 900;
+
+    final imageWidth = isDesktop
+      ? 650.0
+      : screenWidth;
     final images = post.attachments.where(_isImage).toList();
     final files = post.attachments.where((a) => !_isImage(a)).toList();
 
@@ -284,34 +339,28 @@ class PostCard extends StatelessWidget {
 
           // Ảnh đính kèm
           if (images.isNotEmpty)
-            GestureDetector(
-              onTap: onOpen,
-              child: Stack(children: [
-                Image.network(
-                  images.first.fileUrl,
-                  width: double.infinity,
-                  height: 260,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    height: 120,
-                    color: kFbBg,
-                    alignment: Alignment.center,
-                    child: const Icon(Icons.broken_image, color: kFbText2),
+          GestureDetector(
+            onTap: () => _showImageViewer(
+              context,
+              images.first.fileUrl,
+            ),
+            child: Center(
+              child: Image.network(
+                images.first.fileUrl,
+                width: imageWidth,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Container(
+                  height: 120,
+                  color: kFbBg,
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.broken_image,
+                    color: kFbText2,
                   ),
                 ),
-                if (images.length > 1)
-                  Positioned.fill(
-                    child: Container(
-                      color: Colors.black38,
-                      alignment: Alignment.center,
-                      child: Text('+${images.length - 1}',
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 40, fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-              ]),
+              ),
             ),
-
+          ),
           // Tệp đính kèm khác
           for (final f in files)
             InkWell(

@@ -101,7 +101,7 @@ class _StaffListPageState extends State<StaffListPage> {
 
     'APPROVED',
 
-    'FORWARDING',
+    //'FORWARDING',
 
     'RESOLVED',
 
@@ -528,9 +528,9 @@ class _StaffListPageState extends State<StaffListPage> {
 
         return 'Đang chờ tiếp nhận';
 
-      case 'FORWARDING':
+      //case 'FORWARDING':
 
-        return 'Đã được chuyển tiếp';
+        //return 'Đã được chuyển tiếp';
 
       case 'APPROVED':
 
