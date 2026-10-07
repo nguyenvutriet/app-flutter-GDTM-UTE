@@ -6,26 +6,30 @@
 //  2. Đưa danh sách đó vào system prompt, yêu cầu Gemini chỉ trả lời dựa trên danh sách.
 //  3. Gemini trả JSON { answer, announcement_ids } -> app hiện câu trả lời + thẻ thông báo liên quan.
 //
-// Điểm mới so với bản cũ:
+// Tính năng:
 //  - Tự thích nghi với model: nếu model không hỗ trợ systemInstruction ("Developer instruction
 //    is not enabled") hoặc không hỗ trợ JSON mode, service tự gửi lại theo cách khác và nhớ lại
 //    cho các lần hỏi sau (không cần sửa code khi đổi model).
-//  - Thông báo lỗi luôn in đúng tên model đã gặp lỗi.
+//  - Thông báo lỗi luôn in đúng tên model đã gặp lỗi; lỗi mạng hiện kèm chi tiết thật.
 //  - Model dự phòng được thử khi model chính quá tải HOẶC không tồn tại (404).
-//  - Giảm thời gian chờ: tối đa 2 lần thử / model, timeout 25 giây.
+//  - Timeout 45 giây; quá thời gian thì chuyển ngay sang model dự phòng (không chờ lặp lại).
+//  - Giảm "thinking" để trả lời nhanh hơn.
 //
 // pubspec.yaml: http, flutter_dotenv
 // .env:
 //   GEMINI_API_KEY=<key của bạn>
 //   GEMINI_MODEL=gemini-2.5-flash
 //   GEMINI_FALLBACK_MODEL=gemini-2.5-flash-lite
+//   (đổi GEMINI_MODEL=gemini-3.8-flash nếu muốn dùng model mới nhất)
 //
 // LƯU Ý BẢO MẬT: key đặt trong app (đặc biệt bản web) có thể bị lộ. Hãy giới hạn key theo
 // tên miền / ứng dụng trong Google AI Studio hoặc Google Cloud, và khi triển khai thật nên đưa
 // lệnh gọi Gemini ra Cloud Function (hoặc dùng Firebase AI Logic).
 
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 
 import 'package:app_gdtm/models/announcement_item.dart';
@@ -49,6 +53,7 @@ class ChatReply {
 class _ModelCaps {
   bool systemInstruction = true;
   bool jsonMode = true;
+  bool thinking = true; // gửi thinkingConfig (giảm "suy nghĩ" để trả lời nhanh)
 }
 
 /// Kết quả một lần gọi: response + tên model đã dùng.
@@ -63,12 +68,12 @@ class ChatbotService {
   /// (khi Google ngừng model cũ, chỉ cần đổi tên trong .env, không phải sửa code).
   static const String defaultModel = 'gemini-2.5-flash';
 
-  static const int _maxAnnouncements = 40; // số thông báo mới nhất đưa cho bot
-  static const int _maxContentChars = 700; // cắt nội dung mỗi thông báo
+  static const int _maxAnnouncements = 30; // số thông báo mới nhất đưa cho bot
+  static const int _maxContentChars = 500; // cắt nội dung mỗi thông báo
   static const int _maxHistoryTurns = 8; // số tin nhắn gần nhất gửi kèm
   static const Duration _cacheTtl = Duration(minutes: 3);
   static const int _maxAttempts = 2; // số lần thử tối đa khi gặp lỗi tạm thời
-  static const Duration _timeout = Duration(seconds: 25);
+  static const Duration _timeout = Duration(seconds: 45);
 
   final AnnouncementService announcements;
   final String apiKey;
@@ -128,7 +133,8 @@ class ChatbotService {
 
     // 2) Model dự phòng khi model chính quá tải hoặc không tồn tại
     final fb = fallbackModel?.trim();
-    if ((_isTransient(result.res.statusCode) || result.res.statusCode == 404) &&
+    final st = result.res.statusCode;
+    if ((_isTransient(st) || st == 404 || st == 408) &&
         fb != null &&
         fb.isNotEmpty &&
         fb != model) {
@@ -209,7 +215,7 @@ class ChatbotService {
     final caps = _caps.putIfAbsent(modelName, () => _ModelCaps());
     late http.Response res;
 
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < 4; i++) {
       final body = _buildBody(caps, items, recent, question);
       res = await _send(modelName, body);
 
@@ -221,6 +227,11 @@ class ChatbotService {
                 d.contains('system instruction') ||
                 d.contains('systeminstruction'))) {
           caps.systemInstruction = false;
+          continue;
+        }
+
+        if (caps.thinking && d.contains('thinking')) {
+          caps.thinking = false;
           continue;
         }
 
@@ -266,7 +277,12 @@ class ChatbotService {
       }
     }
 
-    final generationConfig = <String, dynamic>{'temperature': 0.3};
+    // Không đặt temperature: các model Gemini 3 khuyến nghị giữ mặc định.
+    final generationConfig = <String, dynamic>{};
+    if (caps.thinking) {
+      // Hạn chế "suy nghĩ" dài để trả lời nhanh. Model không hỗ trợ sẽ tự bị bỏ qua.
+      generationConfig['thinkingConfig'] = {'thinkingLevel': 'low'};
+    }
     if (caps.jsonMode) {
       generationConfig['responseMimeType'] = 'application/json';
       generationConfig['responseSchema'] = {
@@ -322,9 +338,13 @@ class ChatbotService {
               body: jsonEncode(body),
             )
             .timeout(_timeout);
-      } catch (_) {
+      } on TimeoutException {
+        // Không thử lại cùng model (sẽ chờ gấp đôi); trả mã 408 để chuyển sang model dự phòng.
+        return http.Response('', 408);
+      } catch (e) {
+        debugPrint('Gemini request lỗi ($modelName): $e');
         throw ChatbotException(
-            'Không kết nối được tới Gemini. Kiểm tra mạng rồi thử lại.');
+            'Không kết nối được tới Gemini (model "$modelName"). Chi tiết: $e');
       }
       if (!_isTransient(res.statusCode) || attempt == _maxAttempts) break;
       await Future.delayed(Duration(milliseconds: 1000 * attempt));
@@ -435,6 +455,8 @@ class ChatbotService {
         return 'API key không có quyền gọi Gemini (hoặc bị giới hạn theo tên miền). $detail';
       case 404:
         return 'Không dùng được model "$modelName". Hãy đổi GEMINI_MODEL / GEMINI_FALLBACK_MODEL trong file .env. $detail';
+      case 408:
+        return 'Gemini phản hồi quá lâu (model "$modelName"). Thử lại hoặc đổi sang model nhẹ hơn.';
       case 429:
         return 'Trợ lý đang quá tải hoặc đã hết hạn mức miễn phí. Vui lòng thử lại sau ít phút.';
       case 500:
