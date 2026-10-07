@@ -6,7 +6,6 @@ import 'package:app_gdtm/widgets/app_colors.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
