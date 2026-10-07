@@ -73,6 +73,7 @@ flutter:
   assets:
     - lib/assets/ute_logo.png
     - lib/assets/google_g.png
+    - .env
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
