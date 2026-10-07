@@ -7,11 +7,13 @@ class AppMenuItem {
   final String id;
   final String title;
   final IconData icon;
+  final int badge;
 
   const AppMenuItem({
     required this.id,
     required this.title,
     required this.icon,
+    this.badge = 0,
   });
 }
 
@@ -295,6 +297,27 @@ class _MenuTile extends StatelessWidget {
                 ),
               ),
             ),
+            if (item.badge > 0)
+              Container(
+                height: 18, // cố định chiều cao, nếu không sẽ bị kéo dài hết 48px của tile
+                constraints: const BoxConstraints(minWidth: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: Colors.white, width: 1.2),
+                ),
+                child: Text(
+                  item.badge > 99 ? '99+' : '${item.badge}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.bold,
+                    height: 1.1,
+                  ),
+                ),
+              ),        
           ],
         ),
       ),

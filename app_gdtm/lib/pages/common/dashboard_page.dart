@@ -41,6 +41,7 @@ import 'package:app_gdtm/pages/admin/violation_posts_page.dart';
 import 'package:app_gdtm/pages/admin/feedback_list_page.dart';
 import 'package:app_gdtm/services/admin_notification_service.dart';
 import 'package:app_gdtm/pages/admin/admin_notification_page.dart';
+import 'package:app_gdtm/widgets/admin_notification_bell.dart';
 
 /// Trang chủ dashboard: khung (header + menu) dùng chung,
 /// menu và nội dung đổi theo role và mục menu được chọn.
@@ -314,9 +315,9 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               AppMenuItem(
                 id: 'notifications',
-                // title: 'Thông báo',
-                title: _adminUnread > 0 ? 'Thông báo ($_adminUnread)' : 'Thông báo',
+                title: 'Thông báo',
                 icon: Icons.notifications,
+                badge: _adminUnread,
               ),
               AppMenuItem(
                 id: 'change_password',
@@ -615,6 +616,13 @@ class _DashboardPageState extends State<DashboardPage> {
 
       // Người dùng đang đăng nhập
       user: widget.user,
+      notificationBell: widget.role == UserRole.admin
+          ? AdminNotificationBell(
+              service: _adminNotifications,
+              onOpenReport: _openAdminNotification,
+              onSeeAll: () => setState(() => _selectedId = 'notifications'),
+            )
+          : null,
 
       // Nút chatbot nổi ở góc phải dưới, hiện trên mọi trang
       child: Stack(

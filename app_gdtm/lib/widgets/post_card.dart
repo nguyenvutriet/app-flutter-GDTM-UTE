@@ -1,8 +1,10 @@
 // lib/widgets/post_card.dart
 import 'package:flutter/material.dart';
 import 'package:app_gdtm/models/forum_post.dart';
+import 'attachment_utils.dart';
 import 'forum_utils.dart';
 import 'post_link.dart';
+import 'pdf_view.dart';
 import 'reaction_button.dart';
 
 class PostCard extends StatelessWidget {
@@ -56,6 +58,56 @@ class PostCard extends StatelessWidget {
     final u = a.fileUrl.toLowerCase().split('?').first;
     const exts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
     return t.contains('image') || exts.any((e) => t == e || u.endsWith('.$e'));
+  }
+
+  String _extension(AttachmentDTO file) {
+    final type = file.fileType.toLowerCase().replaceAll('.', '');
+    if (type.isNotEmpty && !type.contains('/')) return type;
+    if (type.contains('pdf')) return 'pdf';
+    final name = file.fileName.split('?').first.toLowerCase();
+    final dot = name.lastIndexOf('.');
+    if (dot >= 0 && dot < name.length - 1) return name.substring(dot + 1);
+    final url = file.fileUrl.split('?').first.toLowerCase();
+    final urlDot = url.lastIndexOf('.');
+    return urlDot >= 0 && urlDot < url.length - 1 ? url.substring(urlDot + 1) : '';
+  }
+
+  Future<void> _showFilePreview(BuildContext context, AttachmentDTO file) async {
+    final url = file.fileUrl.trim();
+    final uri = Uri.tryParse(url);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đường dẫn tệp không hợp lệ.')),
+      );
+      return;
+    }
+    final isPdf = _extension(file) == 'pdf';
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.all(20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900, maxHeight: 720),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              leading: Icon(isPdf ? Icons.picture_as_pdf : Icons.insert_drive_file_outlined),
+              title: Text(file.fileName, maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: IconButton(
+                tooltip: 'Đóng',
+                onPressed: () => Navigator.pop(dialogContext),
+                icon: const Icon(Icons.close),
+              ),
+            ),
+            const Divider(height: 1),
+            Flexible(
+              child: isPdf
+                  ? PdfView(url: url)
+                  : _UnsupportedFilePreview(onOpen: () => openUrl(context, url)),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 
   /// Có thao tác phụ nào để hiện trong menu ⋯ không
@@ -262,7 +314,10 @@ class PostCard extends StatelessWidget {
 
           // Tệp đính kèm khác
           for (final f in files)
-            Container(
+            InkWell(
+              onTap: () => _showFilePreview(context, f),
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
               margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(color: kFbBg, borderRadius: BorderRadius.circular(8)),
@@ -272,7 +327,9 @@ class PostCard extends StatelessWidget {
                 Expanded(
                   child: Text(f.fileName, maxLines: 1, overflow: TextOverflow.ellipsis),
                 ),
+                const Icon(Icons.visibility_outlined, size: 20, color: kFbText2),
               ]),
+              ),
             ),
 
           // Thống kê
@@ -331,6 +388,34 @@ class PostCard extends StatelessWidget {
               ),
             ),
           ]),
+        ]),
+      ),
+    );
+  }
+}
+
+class _UnsupportedFilePreview extends StatelessWidget {
+  final VoidCallback onOpen;
+
+  const _UnsupportedFilePreview({required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.insert_drive_file_outlined, size: 54, color: kFbText2),
+          const SizedBox(height: 12),
+          const Text('Định dạng này chưa hỗ trợ xem trước.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15, color: kFbText2)),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: onOpen,
+            icon: const Icon(Icons.open_in_new_rounded),
+            label: const Text('Mở tệp'),
+          ),
         ]),
       ),
     );
