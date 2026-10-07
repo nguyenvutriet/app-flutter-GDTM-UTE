@@ -64,8 +64,7 @@ class StaffConversationDialog extends StatefulWidget {
 }
 
 class _StaffConversationDialogState extends State<StaffConversationDialog> {
-  late final ConversationChatService _service =
-      widget.service ?? ConversationChatService();
+  late final ConversationChatService _service = widget.service ?? ConversationChatService();
 
   Stream<List<ConversationInfo>>? _stream;
 
@@ -249,7 +248,8 @@ class _EmptyState extends StatelessWidget {
           else
             const _InfoNotice(
               icon: Icons.lock_outline,
-              text: 'Phòng ban của bạn không còn quyền xử lý góp ý này '
+              text:
+                  'Phòng ban của bạn không còn quyền xử lý góp ý này '
                   'nên không thể mở hội thoại.',
             ),
         ],
@@ -382,9 +382,8 @@ class _OpenConversationFormState extends State<_OpenConversationForm> {
                 ),
               ],
               decoration: _decoration('Chủ đề'),
-              validator: (value) => (value ?? '').trim().isEmpty
-                  ? 'Vui lòng nhập chủ đề'
-                  : null,
+              validator: (value) =>
+                  (value ?? '').trim().isEmpty ? 'Vui lòng nhập chủ đề' : null,
             ),
             const SizedBox(height: 14),
             TextFormField(
@@ -525,8 +524,8 @@ class _ConversationChatState extends State<_ConversationChat> {
   final _inputFocus = FocusNode();
   final _files = <PlatformFile>[];
 
-  late final Stream<List<ConversationMessage>> _messages =
-      widget.service.watchMessages(widget.conversation);
+  late final Stream<List<ConversationMessage>> _messages = widget.service
+      .watchMessages(widget.conversation);
 
   bool _sending = false;
   bool _closing = false;
