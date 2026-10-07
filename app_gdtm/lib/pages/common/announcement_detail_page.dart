@@ -1,5 +1,5 @@
 // lib/pages/common/announcement_detail_page.dart
-// Chi tiết thông báo: nội dung, thông tin phòng ban đăng, tệp đính kèm.
+// Chi tiết thông báo: nội dung, tệp đính kèm, và cuối cùng là thông tin phòng ban đăng.
 // PDF hiển thị trực tiếp trong trang; Word / Excel hiện nút "Tải về".
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -47,8 +47,6 @@ class AnnouncementDetailPage extends StatelessWidget {
                 SelectableText(item.content,
                     style: const TextStyle(fontSize: 15.5, height: 1.45)),
               ]),
-              const SizedBox(height: 12),
-              _departmentPanel(context),
               if (item.attachments.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 _Panel(
@@ -59,6 +57,9 @@ class AnnouncementDetailPage extends StatelessWidget {
                   ],
                 ),
               ],
+              // Thông tin phòng ban nằm cuối trang
+              const SizedBox(height: 12),
+              _departmentPanel(context),
             ],
           ),
         ),
