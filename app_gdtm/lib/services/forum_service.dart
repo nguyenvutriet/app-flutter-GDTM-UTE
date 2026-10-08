@@ -47,7 +47,11 @@ class DepartmentInfo {
 
   /// Các dòng chi tiết (nhãn tiếng Việt -> giá trị), chỉ gồm trường có dữ liệu.
   final List<MapEntry<String, String>> details;
-  DepartmentInfo({required this.id, required this.name, this.details = const []});
+  DepartmentInfo({
+    required this.id,
+    required this.name,
+    this.details = const [],
+  });
 }
 
 enum SuggestionType { post, department }
@@ -61,11 +65,11 @@ class SearchSuggestion {
   final String? departmentId;
 
   const SearchSuggestion.post(this.text)
-      : type = SuggestionType.post,
-        departmentId = null;
+    : type = SuggestionType.post,
+      departmentId = null;
 
   const SearchSuggestion.department(this.text, this.departmentId)
-      : type = SuggestionType.department;
+    : type = SuggestionType.department;
 }
 
 class _SuggestItem {
@@ -106,7 +110,8 @@ class ForumService {
   // (requests đã khớp với RequestService; các tên còn lại là suy đoán)
   // ------------------------------------------------------------
   static const String requestsCollection = RequestService.requestsCollection;
-  static const String attachmentsCollection = RequestService.fileAttachmentsCollection;
+  static const String attachmentsCollection =
+      RequestService.fileAttachmentsCollection;
   static const String commentsCollection = 'comment'; // chưa thấy trên Firestore (collection chỉ xuất hiện sau khi có bình luận đầu tiên)
   static const String votesCollection = 'vote';
   static const String voteCommentsCollection = 'votecomment';
@@ -127,8 +132,8 @@ class ForumService {
   ForumService({
     required String? Function() currentUserId,
     FirebaseFirestore? db,
-  })  : _getCurrentUserId = currentUserId,
-        _db = db ?? FirebaseFirestore.instance;
+  }) : _getCurrentUserId = currentUserId,
+       _db = db ?? FirebaseFirestore.instance;
 
   String get _uid {
     final id = _getCurrentUserId();
@@ -166,8 +171,7 @@ class ForumService {
 
   /// getPublicPosts + sắp xếp + tìm kiếm từng chữ + lọc phòng ban / khoảng ngày.
   ///
-  /// - Lọc phòng ban và ngày chạy phía server. Cần composite index (Firestore sẽ in link tạo):
-  ///   postStatus (asc) + departmentId (asc) + timeCreate (desc).
+  /// - Lọc trạng thái, phòng ban và ngày phía client để không cần composite index.
   /// - Tìm kiếm: quét theo lô, lọc phía client, vẫn phân trang bằng cursor
   ///   nên cuộn vô hạn hoạt động cả khi đang tìm kiếm.
   /// - "Cũ nhất" / "Mới nhất" sắp xếp phía server (đúng trên toàn bộ dữ liệu);
@@ -198,22 +202,20 @@ class ForumService {
     var rounds = 0;
 
     while (visible.length < limit && hasMore && rounds++ < maxRounds) {
+      final start = fromDate == null
+          ? null
+          : DateTime(fromDate.year, fromDate.month, fromDate.day);
+      final end = toDate == null
+          ? null
+          : DateTime(
+              toDate.year,
+              toDate.month,
+              toDate.day,
+            ).add(const Duration(days: 1));
       Query<Map<String, dynamic>> q = _db
           .collection(requestsCollection)
-          .where('postStatus', isEqualTo: RequestService.postStatusPublic);
-      if (departmentId != null && departmentId.isNotEmpty) {
-        q = q.where('departmentId', isEqualTo: departmentId);
-      }
-      if (fromDate != null) {
-        final start = DateTime(fromDate.year, fromDate.month, fromDate.day);
-        q = q.where('timeCreate', isGreaterThanOrEqualTo: Timestamp.fromDate(start));
-      }
-      if (toDate != null) {
-        final end =
-            DateTime(toDate.year, toDate.month, toDate.day).add(const Duration(days: 1));
-        q = q.where('timeCreate', isLessThan: Timestamp.fromDate(end));
-      }
-      q = q.orderBy('timeCreate', descending: sortBy != 'oldest').limit(batchSize);
+          .orderBy('timeCreate', descending: sortBy != 'oldest')
+          .limit(batchSize);
       if (cursor != null) q = q.startAfterDocument(cursor);
 
       final snap = await q.get();
@@ -224,13 +226,33 @@ class ForumService {
       cursor = snap.docs.last;
       hasMore = snap.docs.length == batchSize;
 
-      var docs = snap.docs.where((d) => admin || !_isHidden(d.data())).toList();
+      var docs = snap.docs.where((d) {
+        final m = d.data();
+        final createdAt = (m['timeCreate'] as Timestamp?)?.toDate();
+        if (m['postStatus'] != RequestService.postStatusPublic) return false;
+        if (departmentId != null &&
+            departmentId.isNotEmpty &&
+            m['departmentId']?.toString() != departmentId) {
+          return false;
+        }
+        if (start != null && (createdAt == null || createdAt.isBefore(start))) {
+          return false;
+        }
+        if (end != null && (createdAt == null || !createdAt.isBefore(end))) {
+          return false;
+        }
+        return admin || !_isHidden(m);
+      }).toList();
       if (searching) docs = await _filterByKeyword(docs, tokens);
       visible.addAll(docs);
     }
 
     final posts = await _buildPosts(visible, uid);
-    return PostPage(posts: _sort(sortBy, posts), lastDoc: cursor, hasMore: hasMore);
+    return PostPage(
+      posts: _sort(sortBy, posts),
+      lastDoc: cursor,
+      hasMore: hasMore,
+    );
   }
 
   /// Mọi chữ trong từ khóa đều phải xuất hiện (không phân biệt hoa/thường, dấu)
@@ -241,19 +263,22 @@ class ForumService {
   ) async {
     if (docs.isEmpty) return docs;
     final users = await _loadUsers(
-        docs.map((d) => d.data()['userId']).whereType<String>().toSet());
+      docs.map((d) => d.data()['userId']).whereType<String>().toSet(),
+    );
     return docs.where((d) {
       final m = d.data();
       final cats = (m['categoryIds'] as List? ?? [])
           .map((id) => _categoryNames![id.toString()] ?? '')
           .join(' ');
-      final hay = foldVi([
-        m['subject']?.toString() ?? '',
-        m['description']?.toString() ?? '',
-        cats,
-        _departmentNames![m['departmentId']] ?? '',
-        _userName(users[m['userId']]),
-      ].join(' '));
+      final hay = foldVi(
+        [
+          m['subject']?.toString() ?? '',
+          m['description']?.toString() ?? '',
+          cats,
+          _departmentNames![m['departmentId']] ?? '',
+          _userName(users[m['userId']]),
+        ].join(' '),
+      );
       return tokens.every(hay.contains);
     }).toList();
   }
@@ -308,12 +333,15 @@ class ForumService {
 
     final snap = await _db
         .collection(requestsCollection)
-        .where('postStatus', isEqualTo: RequestService.postStatusPublic)
         .orderBy('timeCreate', descending: true)
         .limit(scanLimit)
         .get();
 
-    final docs = snap.docs.where((d) => admin || !_isHidden(d.data())).toList();
+    final docs = snap.docs.where((d) {
+      final m = d.data();
+      return m['postStatus'] == RequestService.postStatusPublic &&
+          (admin || !_isHidden(m));
+    }).toList();
     final matched = await _filterByKeyword(docs, tokens);
     return _sort(sortBy, await _buildPosts(matched, uid));
   }
@@ -325,14 +353,18 @@ class ForumService {
     final t = _validType(type);
     final ref = _db.collection(votesCollection).doc('${uid}_$postId');
 
-    final current = await _toggle(ref, t, () => {
-          // Khớp Vote.toFirestore()
-          'id': VoteId(userId: uid, requestId: postId).toJson(),
-          'reactionType': t,
-          'requestId': postId,
-          'userId': uid,
-          'voteAt': Timestamp.now(),
-        });
+    final current = await _toggle(
+      ref,
+      t,
+      () => {
+        // Khớp Vote.toFirestore()
+        'id': VoteId(userId: uid, requestId: postId).toJson(),
+        'reactionType': t,
+        'requestId': postId,
+        'userId': uid,
+        'voteAt': Timestamp.now(),
+      },
+    );
 
     final snap = await _db
         .collection(votesCollection)
@@ -352,11 +384,12 @@ class ForumService {
   Future<List<DepartmentInfo>> getDepartments() async {
     _uid; // bắt buộc đăng nhập
     await _ensureLookups();
-    final list = _departmentNames!.entries
-        .where((e) => e.value.trim().isNotEmpty)
-        .map((e) => DepartmentInfo(id: e.key, name: e.value))
-        .toList()
-      ..sort((a, b) => foldVi(a.name).compareTo(foldVi(b.name)));
+    final list =
+        _departmentNames!.entries
+            .where((e) => e.value.trim().isNotEmpty)
+            .map((e) => DepartmentInfo(id: e.key, name: e.value))
+            .toList()
+          ..sort((a, b) => foldVi(a.name).compareTo(foldVi(b.name)));
     return list;
   }
 
@@ -364,7 +397,10 @@ class ForumService {
   Future<DepartmentInfo?> getDepartmentInfo(String departmentId) async {
     _uid;
     if (departmentId.trim().isEmpty) return null;
-    final doc = await _db.collection(departmentsCollection).doc(departmentId).get();
+    final doc = await _db
+        .collection(departmentsCollection)
+        .doc(departmentId)
+        .get();
     if (!doc.exists) return null;
     final m = doc.data() ?? {};
 
@@ -408,8 +444,9 @@ class ForumService {
       email: u['email']?.toString() ?? '',
       role: _userRole(u),
       departmentId: depId,
-      departmentName:
-          (depId == null || depId.isEmpty) ? null : _departmentNames![depId],
+      departmentName: (depId == null || depId.isEmpty)
+          ? null
+          : _departmentNames![depId],
     );
   }
 
@@ -443,7 +480,6 @@ class ForumService {
     final admin = await isAdmin();
     final snap = await _db
         .collection(requestsCollection)
-        .where('postStatus', isEqualTo: RequestService.postStatusPublic)
         .orderBy('timeCreate', descending: true)
         .limit(300)
         .get();
@@ -452,6 +488,7 @@ class ForumService {
     final pool = <_SuggestItem>[];
     for (final d in snap.docs) {
       final m = d.data();
+      if (m['postStatus'] != RequestService.postStatusPublic) continue;
       if (!admin && _isHidden(m)) continue;
       final subject = (m['subject']?.toString() ?? '').trim();
       if (subject.isEmpty) continue;
@@ -465,7 +502,10 @@ class ForumService {
 
   /// Gợi ý khi gõ: tiêu đề bài viết khớp (ưu tiên tiêu đề bắt đầu bằng chữ đầu tiên,
   /// còn lại giữ thứ tự mới → cũ) + tối đa 2 phòng ban khớp tên.
-  Future<List<SearchSuggestion>> getSuggestions(String keyword, {int limit = 6}) async {
+  Future<List<SearchSuggestion>> getSuggestions(
+    String keyword, {
+    int limit = 6,
+  }) async {
     _uid; // bắt buộc đăng nhập
     final tokens = searchTokens(keyword);
     if (tokens.isEmpty) return [];
@@ -478,12 +518,16 @@ class ForumService {
     final rest = matched.where((p) => !p.folded.startsWith(first));
 
     final out = <SearchSuggestion>[
-      for (final p in [...starts, ...rest].take(limit)) SearchSuggestion.post(p.text),
+      for (final p in [...starts, ...rest].take(limit))
+        SearchSuggestion.post(p.text),
     ];
 
     final deps = _departmentNames!.entries
-        .where((e) =>
-            e.value.trim().isNotEmpty && tokens.every(foldVi(e.value).contains))
+        .where(
+          (e) =>
+              e.value.trim().isNotEmpty &&
+              tokens.every(foldVi(e.value).contains),
+        )
         .take(2);
     for (final e in deps) {
       out.add(SearchSuggestion.department(e.value, e.key));
@@ -601,7 +645,8 @@ class ForumService {
   }) async {
     final uid = _uid;
     final text = content.trim();
-    if (text.isEmpty) throw ForumException('Nội dung bình luận không được để trống');
+    if (text.isEmpty)
+      throw ForumException('Nội dung bình luận không được để trống');
 
     final ref = _db.collection(commentsCollection).doc();
     final now = DateTime.now();
@@ -681,7 +726,9 @@ class ForumService {
       throw ForumException('Bạn không thể báo cáo bình luận của chính mình');
     }
 
-    final ref = _db.collection(commentReportsCollection).doc('${uid}_$commentId');
+    final ref = _db
+        .collection(commentReportsCollection)
+        .doc('${uid}_$commentId');
     await _db.runTransaction((tx) async {
       final snap = await tx.get(ref);
       if (snap.exists) throw ForumException('Bạn đã báo cáo bình luận này rồi');
@@ -712,7 +759,10 @@ class ForumService {
   /// - Hiện lại (isHidden = false): bình luận hiển thị bình thường. Các báo cáo đã chốt
   ///   "vi phạm" của nó chuyển thành "không vi phạm" (admin đã xem xét lại).
   /// Khác với xóa (isActive = false, do chính chủ xóa) nên hai trạng thái không lẫn nhau.
-  Future<void> setCommentHidden(String commentId, {required bool hidden}) async {
+  Future<void> setCommentHidden(
+    String commentId, {
+    required bool hidden,
+  }) async {
     if (!await isAdmin()) {
       throw ForumException('Chỉ quản trị viên mới được ẩn/hiện bình luận');
     }
@@ -723,10 +773,14 @@ class ForumService {
     // Bình luận thuộc bài viết đang bị ẩn thì không được ẩn/hiện riêng lẻ
     final requestId = doc.data()?['requestId']?.toString() ?? '';
     if (requestId.isNotEmpty) {
-      final post = await _db.collection(requestsCollection).doc(requestId).get();
+      final post = await _db
+          .collection(requestsCollection)
+          .doc(requestId)
+          .get();
       if (_isHidden(post.data() ?? {})) {
         throw ForumException(
-            'Bài viết đang bị ẩn. Hãy hiện lại bài viết trước khi ẩn/hiện bình luận.');
+          'Bài viết đang bị ẩn. Hãy hiện lại bài viết trước khi ẩn/hiện bình luận.',
+        );
       }
     }
 
@@ -767,13 +821,17 @@ class ForumService {
     final t = _validType(type);
     final ref = _db.collection(voteCommentsCollection).doc('${uid}_$commentId');
 
-    final current = await _toggle(ref, t, () => {
-          // Khớp VoteComment.toFirestore()
-          'reactionType': t,
-          'commentId': commentId,
-          'userId': uid,
-          'voteAt': Timestamp.now(),
-        });
+    final current = await _toggle(
+      ref,
+      t,
+      () => {
+        // Khớp VoteComment.toFirestore()
+        'reactionType': t,
+        'commentId': commentId,
+        'userId': uid,
+        'voteAt': Timestamp.now(),
+      },
+    );
 
     final snap = await _db
         .collection(voteCommentsCollection)
@@ -799,11 +857,14 @@ class ForumService {
     String targetId,
   ) async {
     _uid; // bắt buộc đăng nhập
-    final snap =
-        await _db.collection(collection).where(field, isEqualTo: targetId).get();
+    final snap = await _db
+        .collection(collection)
+        .where(field, isEqualTo: targetId)
+        .get();
     final votes = snap.docs.map((d) => d.data()).toList();
     final users = await _loadUsers(
-        votes.map((v) => v['userId']).whereType<String>().toSet());
+      votes.map((v) => v['userId']).whereType<String>().toSet(),
+    );
 
     final list = votes.map((v) {
       final id = v['userId']?.toString() ?? '';
@@ -846,17 +907,20 @@ class ForumService {
     try {
       final uid = _uid;
       final reporter = _userName((await _loadUsers({uid}))[uid]);
-      await _db.collection(adminNotificationsCollection).doc('${type}_$reportId').set({
-        'type': type,
-        'title': title,
-        'content': '$reporter báo cáo $what — lý do: $reason',
-        'requestId': requestId,
-        'targetId': targetId,
-        'reportId': reportId,
-        'reporterId': uid,
-        'isRead': false,
-        'createdAt': Timestamp.now(),
-      });
+      await _db
+          .collection(adminNotificationsCollection)
+          .doc('${type}_$reportId')
+          .set({
+            'type': type,
+            'title': title,
+            'content': '$reporter báo cáo $what — lý do: $reason',
+            'requestId': requestId,
+            'targetId': targetId,
+            'reportId': reportId,
+            'reporterId': uid,
+            'isRead': false,
+            'createdAt': Timestamp.now(),
+          });
     } catch (e) {
       debugPrint('[ForumService] _notifyAdmins thất bại ($type/$reportId): $e');
     }
@@ -864,7 +928,8 @@ class ForumService {
 
   String _validType(String type) {
     final t = type.toUpperCase();
-    if (!kReactionTypes.contains(t)) throw ForumException('Loại reaction không hợp lệ!');
+    if (!kReactionTypes.contains(t))
+      throw ForumException('Loại reaction không hợp lệ!');
     return t;
   }
 
@@ -896,8 +961,10 @@ class ForumService {
     await _ensureLookups();
 
     final ids = docs.map((d) => d.id).toList();
-    final authorIds =
-        docs.map((d) => d.data()?['userId']).whereType<String>().toSet();
+    final authorIds = docs
+        .map((d) => d.data()?['userId'])
+        .whereType<String>()
+        .toSet();
 
     final votesF = _whereIn(votesCollection, 'requestId', ids);
     final commentsF = _whereIn(commentsCollection, 'requestId', ids);
@@ -911,10 +978,14 @@ class ForumService {
 
     final admin = await isAdmin();
     // Số bình luận hiển thị: người thường không đếm bình luận bị ẩn
-    final visibleBy = _groupBy(_visibleComments(commentDocs, admin), 'requestId');
+    final visibleBy = _groupBy(
+      _visibleComments(commentDocs, admin),
+      'requestId',
+    );
 
-    final tree =
-        withComments ? await _commentTree(commentDocs, uid, admin) : <CommentDTO>[];
+    final tree = withComments
+        ? await _commentTree(commentDocs, uid, admin)
+        : <CommentDTO>[];
 
     return docs.map((d) {
       final m = d.data() ?? {};
@@ -947,11 +1018,13 @@ class ForumService {
         reactionType: mine,
         reactions: countReactions(votes.map((v) => v['reactionType'])),
         attachments: (attachBy[d.id] ?? const [])
-            .map((a) => AttachmentDTO(
-                  fileName: (a['filename'] ?? a['fileName'] ?? '').toString(),
-                  fileUrl: (a['fileUrl'] ?? a['fileurl'] ?? '').toString(),
-                  fileType: (a['filestype'] ?? a['fileType'] ?? '').toString(),
-                ))
+            .map(
+              (a) => AttachmentDTO(
+                fileName: (a['filename'] ?? a['fileName'] ?? '').toString(),
+                fileUrl: (a['fileUrl'] ?? a['fileurl'] ?? '').toString(),
+                fileType: (a['filestype'] ?? a['fileType'] ?? '').toString(),
+              ),
+            )
             .toList(),
         comments: tree,
         isHidden: _isHidden(m),
@@ -972,7 +1045,8 @@ class ForumService {
     final ids = active.map((d) => d.id).toList();
     final votesF = _whereIn(voteCommentsCollection, 'commentId', ids);
     final usersF = _loadUsers(
-        active.map((d) => d.data()['userId']).whereType<String>().toSet());
+      active.map((d) => d.data()['userId']).whereType<String>().toSet(),
+    );
     final votesBy = _groupBy(await votesF, 'commentId');
     final users = await usersF;
 
@@ -1006,7 +1080,8 @@ class ForumService {
       );
     }
 
-    final flat = active.map(toDto).toList()..sort((a, b) => _cmpDate(a.date, b.date));
+    final flat = active.map(toDto).toList()
+      ..sort((a, b) => _cmpDate(a.date, b.date));
 
     final repliesBy = <String, List<CommentDTO>>{};
     for (final c in flat.where((c) => c.isReply)) {
@@ -1039,8 +1114,14 @@ class ForumService {
   ) async {
     final out = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
     for (var i = 0; i < ids.length; i += _whereInLimit) {
-      final chunk = ids.sublist(i, i + _whereInLimit > ids.length ? ids.length : i + _whereInLimit);
-      final snap = await _db.collection(collection).where(field, whereIn: chunk).get();
+      final chunk = ids.sublist(
+        i,
+        i + _whereInLimit > ids.length ? ids.length : i + _whereInLimit,
+      );
+      final snap = await _db
+          .collection(collection)
+          .where(field, whereIn: chunk)
+          .get();
       out.addAll(snap.docs);
     }
     return out;
@@ -1073,13 +1154,18 @@ class ForumService {
       }
     }
     for (var i = 0; i < list.length; i += _whereInLimit) {
-      final chunk = list.sublist(i, i + _whereInLimit > list.length ? list.length : i + _whereInLimit);
+      final chunk = list.sublist(
+        i,
+        i + _whereInLimit > list.length ? list.length : i + _whereInLimit,
+      );
       final byDocId = _db
           .collection(usersCollection)
           .where(FieldPath.documentId, whereIn: chunk)
           .get();
-      final byField =
-          _db.collection(usersCollection).where('id', whereIn: chunk).get();
+      final byField = _db
+          .collection(usersCollection)
+          .where('id', whereIn: chunk)
+          .get();
 
       for (final d in (await byDocId).docs) {
         out[d.id] = d.data();
@@ -1104,11 +1190,11 @@ class ForumService {
     ]);
     _departmentNames = {
       for (final d in results[0].docs)
-        d.id: (d.data()['name'] ?? d.data()['departmentName'] ?? '').toString()
+        d.id: (d.data()['name'] ?? d.data()['departmentName'] ?? '').toString(),
     };
     _categoryNames = {
       for (final d in results[1].docs)
-        d.id: (d.data()['subject'] ?? d.data()['name'] ?? '').toString()
+        d.id: (d.data()['subject'] ?? d.data()['name'] ?? '').toString(),
     };
   }
 
@@ -1131,8 +1217,10 @@ class ForumService {
     final active = docs.where((d) => _isActive(d.data())).toList();
     if (admin) return active;
 
-    final hiddenIds =
-        active.where((d) => _isHidden(d.data())).map((d) => d.id).toSet();
+    final hiddenIds = active
+        .where((d) => _isHidden(d.data()))
+        .map((d) => d.id)
+        .toSet();
     return active.where((d) {
       final m = d.data();
       if (_isHidden(m)) return false;
@@ -1143,7 +1231,8 @@ class ForumService {
   }
 
   String _userName(Map<String, dynamic>? u) {
-    final n = u?['fullName'] ??
+    final n =
+        u?['fullName'] ??
         u?['fullname'] ??
         u?['full_name'] ??
         u?['name'] ??
@@ -1153,10 +1242,14 @@ class ForumService {
   }
 
   String _userRole(Map<String, dynamic>? u) =>
-      (u?['role']?.toString().isNotEmpty ?? false) ? u!['role'].toString() : 'ROLE_STUDENT';
+      (u?['role']?.toString().isNotEmpty ?? false)
+      ? u!['role'].toString()
+      : 'ROLE_STUDENT';
 
-  int _cmpDate(DateTime? a, DateTime? b) => (a ?? DateTime.fromMillisecondsSinceEpoch(0))
-      .compareTo(b ?? DateTime.fromMillisecondsSinceEpoch(0));
+  int _cmpDate(DateTime? a, DateTime? b) =>
+      (a ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(
+        b ?? DateTime.fromMillisecondsSinceEpoch(0),
+      );
 
   // Strategy sort (thay ForumSortContext) — chỉnh theo các strategy thật của bạn
   List<ForumPostDTO> _sort(String sortBy, List<ForumPostDTO> posts) {
