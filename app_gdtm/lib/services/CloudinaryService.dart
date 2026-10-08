@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:app_gdtm/utils/file_picker_compat.dart';
+
 /// Cấu hình Cloudinary.
 ///
 /// Chỉ đặt ở đây cloud name + upload preset (loại UNSIGNED).
@@ -90,17 +92,14 @@ class CloudinaryService {
   ///   được xếp vào `folder/ownerId` cho dễ quản lý.
   ///
   /// Dùng endpoint `auto/upload` để Cloudinary tự nhận loại file
-  /// (ảnh, pdf, docx, zip...). File phải được chọn với `withData: true`
-  /// (để có `file.bytes`, chạy được cả Web lẫn Android/iOS).
+  /// (ảnh, pdf, docx, zip...). Nội dung được đọc qua [PlatformFile.readAsBytes]
+  /// để chạy được cả Web lẫn Android/iOS.
   Future<CloudinaryUploadResult> uploadFile(
     PlatformFile file, {
     String folder = CloudinaryConfig.feedbackFolder,
     String? ownerId,
   }) async {
-    final bytes = file.bytes;
-    if (bytes == null) {
-      throw CloudinaryException('Không đọc được nội dung tệp "${file.name}".');
-    }
+    final bytes = await file.readAsBytes();
 
     final targetFolder = (ownerId == null || ownerId.isEmpty)
         ? folder

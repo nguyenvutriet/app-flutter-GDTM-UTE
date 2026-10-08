@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'package:app_gdtm/models/Category.dart';
+import 'package:app_gdtm/utils/file_picker_compat.dart';
 import 'package:app_gdtm/models/Department.dart';
 import 'package:app_gdtm/models/FileAttachment.dart';
 import 'package:app_gdtm/models/Request.dart';
@@ -104,14 +105,12 @@ class _EditFeedbackPageState extends State<EditFeedbackPage> {
   }
 
   Future<void> _pickFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      withData: true,
+    final result = await FilePicker.pickFiles(
     );
-    if (result == null) return;
+    if (result.isEmpty) return;
     final files = <PlatformFile>[];
     var total = 0;
-    for (final file in result.files) {
+    for (final file in result) {
       if (file.size > RequestService.maxFileBytes) {
         setState(() => _error = 'Mỗi tệp không được vượt quá 20MB.');
         return;

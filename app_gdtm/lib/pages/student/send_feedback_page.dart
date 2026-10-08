@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import 'package:app_gdtm/utils/file_picker_compat.dart';
 import 'package:app_gdtm/models/Category.dart';
 import 'package:app_gdtm/models/Department.dart';
 import 'package:app_gdtm/models/Users.dart';
@@ -102,15 +103,12 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
   int get _totalBytes => _files.fold<int>(0, (sum, f) => sum + f.size);
 
   Future<void> _pickFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      withData: true, // cần bytes để upload (Web + mobile)
+    final result = await FilePicker.pickFiles(
     );
-    if (result == null) return;
 
     final problems = <String>[];
     setState(() {
-      for (final f in result.files) {
+      for (final f in result) {
         final duplicated =
             _files.any((e) => e.name == f.name && e.size == f.size);
         if (duplicated) continue;

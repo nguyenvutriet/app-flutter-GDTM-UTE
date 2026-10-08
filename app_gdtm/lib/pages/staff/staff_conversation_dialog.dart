@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
+import 'package:app_gdtm/utils/file_picker_compat.dart';
 import 'package:flutter/services.dart';
 
 import 'package:app_gdtm/models/FileAttachment.dart';
@@ -562,12 +564,10 @@ class _ConversationChatState extends State<_ConversationChat> {
   // ------------------------------------------------------------
 
   Future<void> _pickFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      withData: true,
+    final result = await FilePicker.pickFiles(
     );
-    if (result == null || !mounted) return;
-    final files = [..._files, ...result.files];
+    if (!mounted) return;
+    final files = [..._files, ...result];
     final error = CloudinaryService.validateFiles(files);
     if (error != null) {
       setState(() => _error = error);

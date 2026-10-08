@@ -9,6 +9,7 @@ import 'package:app_gdtm/models/Request.dart';
 import 'package:app_gdtm/models/RequestStatusHistory.dart';
 import 'package:app_gdtm/models/Users.dart';
 import 'package:app_gdtm/services/CloudinaryService.dart';
+import 'package:app_gdtm/utils/file_picker_compat.dart';
 import 'feedback_status.dart';
 
 /// Kiểu riêng tư khi gửi góp ý.

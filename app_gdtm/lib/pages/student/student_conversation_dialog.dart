@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import 'package:app_gdtm/utils/file_picker_compat.dart';
 import 'package:app_gdtm/models/FileAttachment.dart';
 import 'package:app_gdtm/models/Request.dart';
 import 'package:app_gdtm/services/CloudinaryService.dart';
@@ -164,12 +165,10 @@ class _StudentConversationState extends State<_StudentConversation> {
   }
 
   Future<void> _pickFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      withData: true,
+    final result = await FilePicker.pickFiles(
     );
-    if (result == null || !mounted) return;
-    final selected = [..._files, ...result.files];
+    if (!mounted) return;
+    final selected = [..._files, ...result];
     final error = CloudinaryService.validateFiles(selected);
     if (error != null) {
       setState(() => _error = error);

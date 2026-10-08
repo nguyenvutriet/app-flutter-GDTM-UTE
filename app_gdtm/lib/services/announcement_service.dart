@@ -12,6 +12,7 @@ import 'package:app_gdtm/models/FileAttachment.dart';
 import 'package:app_gdtm/models/announcement_item.dart';
 import 'package:app_gdtm/services/CloudinaryService.dart';
 import 'package:app_gdtm/services/RequestService.dart';
+import 'package:app_gdtm/utils/file_picker_compat.dart';
 
 class AnnouncementException implements Exception {
   final String message;
