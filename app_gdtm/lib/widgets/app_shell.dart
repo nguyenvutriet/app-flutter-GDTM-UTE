@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:app_gdtm/models/Notification.dart' as app_notification;
@@ -24,7 +26,8 @@ class AppShell extends StatefulWidget {
   final Widget child;
   final ValueChanged<app_notification.Notification>? onNotificationSelected;
   final ValueNotifier<app_notification.Notification?>? notificationReadNotifier;
-    /// Chuông thông báo tùy chỉnh (admin). Null = dùng chuông mặc định.
+
+  /// Chuông thông báo tùy chỉnh (admin). Null = dùng chuông mặc định.
   final Widget? notificationBell;
 
   /// Người dùng đang đăng nhập.
@@ -58,12 +61,15 @@ class _AppShellState extends State<AppShell> {
   int _notificationCount = 0;
   List<app_notification.Notification> _unreadNotifications = [];
   final _notificationService = NotificationService();
+  StreamSubscription<List<app_notification.Notification>>?
+  _notificationSubscription;
 
   @override
   void initState() {
     super.initState();
     widget.notificationReadNotifier?.addListener(_onNotificationReadChanged);
     _loadNotificationCount();
+    _watchNotificationCount();
   }
 
   @override
@@ -80,7 +86,28 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     widget.notificationReadNotifier?.removeListener(_onNotificationReadChanged);
+    _notificationSubscription?.cancel();
     super.dispose();
+  }
+
+  void _watchNotificationCount() {
+    final role = UserRoleX.fromString(widget.user.role);
+    final isDepartmentUser = role == UserRole.staff || role == UserRole.admin;
+    _notificationSubscription = _notificationService
+        .watchNotifications(
+          userId: isDepartmentUser ? null : widget.user.id,
+          departmentId: isDepartmentUser ? widget.user.departmentId : null,
+        )
+        .listen((notifications) {
+          if (!mounted) return;
+          final unread = notifications
+              .where((notification) => notification.isRead != true)
+              .toList();
+          setState(() {
+            _unreadNotifications = unread;
+            _notificationCount = unread.length;
+          });
+        }, onError: (_) {});
   }
 
   Future<void> _loadNotificationCount() async {
@@ -147,7 +174,7 @@ class _AppShellState extends State<AppShell> {
                 ],
               ),
           ];
-          
+
     final menu = AppMenu(
       sections: menuSections,
       footerItems: widget.footerItems,
@@ -463,97 +490,98 @@ class AppHeader extends StatelessWidget {
                 // THÔNG BÁO
                 // ==================================================
                 notificationBell ??
-                PopupMenuButton<app_notification.Notification>(
-                  onSelected: onNotificationSelected,
-                  tooltip: 'Thông báo chưa xem',
-                  color: Colors.white,
-                  itemBuilder: (context) {
-                    if (unreadNotifications.isEmpty) {
-                      return const [
-                        PopupMenuItem(
-                          enabled: false,
-                          child: Text('Không có thông báo mới'),
-                        ),
-                      ];
-                    }
-                    return unreadNotifications
-                        .take(6)
-                        .map(
-                          (notification) =>
-                              PopupMenuItem<app_notification.Notification>(
-                                value: notification,
-                                child: SizedBox(
-                                  width: 300,
-                                  child: ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    leading: Icon(
-                                      Icons.notifications_active,
-                                      color: AppColors.primary,
-                                    ),
-                                    title: Text(
-                                      notification.title ?? 'Thông báo',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      notification.content ?? '',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                        )
-                        .toList();
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        const Icon(
-                          Icons.notifications_none,
-                          color: Colors.white,
-                        ),
-                        if (notificationCount > 0)
-                          Positioned(
-                            right: -8,
-                            top: -8,
-                            child: IgnorePointer(
-                              child: Container(
-                                height: 18,
-                                constraints:
-                                    const BoxConstraints(minWidth: 18),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: Colors.red,
-                                  borderRadius: BorderRadius.circular(9),
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 1.2,
-                                  ),
-                                ),
-                                child: Text(
-                                  notificationCount > 99
-                                      ? '99+'
-                                      : '$notificationCount',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.bold,
-                                    height: 1.1,
-                                  ),
-                                ),
-                              ),
+                    PopupMenuButton<app_notification.Notification>(
+                      onSelected: onNotificationSelected,
+                      tooltip: 'Thông báo chưa xem',
+                      color: Colors.white,
+                      itemBuilder: (context) {
+                        if (unreadNotifications.isEmpty) {
+                          return const [
+                            PopupMenuItem(
+                              enabled: false,
+                              child: Text('Không có thông báo mới'),
                             ),
-                          ),
-                      ],
+                          ];
+                        }
+                        return unreadNotifications
+                            .take(6)
+                            .map(
+                              (notification) =>
+                                  PopupMenuItem<app_notification.Notification>(
+                                    value: notification,
+                                    child: SizedBox(
+                                      width: 300,
+                                      child: ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        leading: Icon(
+                                          Icons.notifications_active,
+                                          color: AppColors.primary,
+                                        ),
+                                        title: Text(
+                                          notification.title ?? 'Thông báo',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        subtitle: Text(
+                                          notification.content ?? '',
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                            )
+                            .toList();
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            const Icon(
+                              Icons.notifications_none,
+                              color: Colors.white,
+                            ),
+                            if (notificationCount > 0)
+                              Positioned(
+                                right: -8,
+                                top: -8,
+                                child: IgnorePointer(
+                                  child: Container(
+                                    height: 18,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 18,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: Colors.red,
+                                      borderRadius: BorderRadius.circular(9),
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 1.2,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      notificationCount > 99
+                                          ? '99+'
+                                          : '$notificationCount',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.bold,
+                                        height: 1.1,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ),
 
                 const SizedBox(width: 4),
 

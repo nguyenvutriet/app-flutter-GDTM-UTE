@@ -730,7 +730,7 @@ class _ForumPageState extends State<ForumPage> {
           onChanged: _onSearchChanged,
           onSubmitted: _submitSearch,
           decoration: InputDecoration(
-            hintText: 'Tìm kiếm bài viết (gõ từng chữ, không cần dấu)',
+            hintText: 'Gõ từ khóa để tìm bài viết',
             prefixIcon: const Icon(Icons.search, color: kFbText2),
             suffixIcon: _searchCtl.text.isEmpty
                 ? null
