@@ -9,6 +9,33 @@ class NotificationService {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  Stream<List<app_notification.Notification>> watchNotifications({
+    String? userId,
+    String? departmentId,
+  }) {
+    return _firestore.collection(notificationsCollection).snapshots().map(
+      (snapshot) {
+        final notifications = snapshot.docs
+            .map(app_notification.Notification.fromFirestore)
+            .where(
+              (notification) =>
+                  userId != null && userId.isNotEmpty
+                      ? notification.userId == userId
+                      : departmentId != null && departmentId.isNotEmpty
+                      ? notification.departmentId == departmentId
+                      : false,
+            )
+            .toList();
+        notifications.sort(
+          (a, b) => (b.createAt ?? DateTime(0)).compareTo(
+            a.createAt ?? DateTime(0),
+          ),
+        );
+        return notifications;
+      },
+    );
+  }
+
   Future<List<app_notification.Notification>> getNotifications({
     String? userId,
     String? departmentId,

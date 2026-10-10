@@ -263,22 +263,19 @@ class ForumService {
   ) async {
     if (docs.isEmpty) return docs;
     final users = await _loadUsers(
-      docs.map((d) => d.data()['userId']).whereType<String>().toSet(),
-    );
+        docs.map((d) => d.data()['userId']).whereType<String>().toSet());
     return docs.where((d) {
       final m = d.data();
       final cats = (m['categoryIds'] as List? ?? [])
           .map((id) => _categoryNames![id.toString()] ?? '')
           .join(' ');
-      final hay = foldVi(
-        [
+      final hay = foldVi([
           m['subject']?.toString() ?? '',
           m['description']?.toString() ?? '',
           cats,
           _departmentNames![m['departmentId']] ?? '',
           _userName(users[m['userId']]),
-        ].join(' '),
-      );
+      ].join(' '));
       return tokens.every(hay.contains);
     }).toList();
   }
@@ -363,8 +360,7 @@ class ForumService {
         'requestId': postId,
         'userId': uid,
         'voteAt': Timestamp.now(),
-      },
-    );
+        });
 
     final snap = await _db
         .collection(votesCollection)
@@ -384,8 +380,7 @@ class ForumService {
   Future<List<DepartmentInfo>> getDepartments() async {
     _uid; // bắt buộc đăng nhập
     await _ensureLookups();
-    final list =
-        _departmentNames!.entries
+    final list = _departmentNames!.entries
             .where((e) => e.value.trim().isNotEmpty)
             .map((e) => DepartmentInfo(id: e.key, name: e.value))
             .toList()
