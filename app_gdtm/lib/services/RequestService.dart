@@ -812,7 +812,6 @@ class RequestService {
       'status': 'FORWARDING',
 
       'createAt': Timestamp.fromDate(now),
-
       'requestId': requestId,
     });
 

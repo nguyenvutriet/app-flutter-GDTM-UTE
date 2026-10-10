@@ -6,6 +6,7 @@ import 'package:app_gdtm/models/Department.dart';
 import 'package:app_gdtm/models/FileAttachment.dart';
 import 'package:app_gdtm/pages/student/student_conversation_dialog.dart';
 import 'package:app_gdtm/models/Request.dart';
+import 'package:app_gdtm/models/RequestStatusHistory.dart';
 import 'package:app_gdtm/models/Users.dart';
 import 'package:app_gdtm/pages/student/post_detail_page.dart';
 import 'package:app_gdtm/services/RequestService.dart';
@@ -149,6 +150,73 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
           .firstOrNull ??
       'Chưa xác định phòng ban';
 
+  String _departmentNameById(String? departmentId) {
+    if (departmentId == null || departmentId.isEmpty) {
+      return 'phòng ban chưa xác định';
+    }
+    final name = widget.departments
+        .where((department) => department.id == departmentId)
+        .map((department) => department.name ?? '')
+        .firstOrNull
+        ?.trim();
+    return name == null || name.isEmpty ? 'phòng ban chưa xác định' : name;
+  }
+
+  
+String _historyTitle(RequestStatusHistory item) {
+  switch (item.status) {
+    case 'PENDING':
+      return 'Đang chờ tiếp nhận';
+    case 'APPROVED':
+      return 'Đang xử lý';
+    case 'RESOLVED':
+      return 'Đã xử lý';
+    case 'REJECTED':
+      return 'Đã từ chối';
+    case 'FORWARDING':
+      return 'Đã chuyển tiếp';
+    default:
+      return _statusLabel(item.status);
+  }
+}
+
+Color _historyColor(String? status) {
+  switch (status?.toUpperCase()) {
+    case 'PENDING':
+      return const Color(0xFFF59E0B);
+    case 'FORWARDING':
+      return const Color(0xFF8B5CF6);
+    case 'APPROVED':
+      return const Color(0xFF3B82F6);
+    case 'RESOLVED':
+      return const Color(0xFF16A34A);
+    case 'REJECTED':
+      return const Color(0xFFDC2626);
+    default:
+      return const Color(0xFF64748B);
+  }
+}
+
+String _historyDescription(RequestStatusHistory item) {
+  final department = _departmentNameById(widget.request.departmentId);
+
+  switch (item.status) {
+    case 'PENDING':
+      return 'Đang chờ $department tiếp nhận';
+    case 'APPROVED':
+      return '$department đã tiếp nhận góp ý';
+    case 'RESOLVED':
+      return '$department đã xử lý góp ý';
+    case 'REJECTED':
+      return '$department đã từ chối góp ý';
+    case 'FORWARDING':
+      return 'Góp ý đã được chuyển tiếp đến $department';
+    default:
+      return 'Trạng thái: ${_statusLabel(item.status)}';
+  }
+}
+
+
   String get _categoryNames => widget.request.categoryIds
       .map(
         (id) => widget.categories
@@ -193,10 +261,6 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
               const SizedBox(height: 14),
 
-              _buildSummary(),
-
-              const SizedBox(height: 16),
-
               FutureBuilder<FeedbackDetails>(
                 future: _details,
                 builder: (context, snapshot) {
@@ -222,6 +286,10 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      _buildSummary(details),
+
+                      const SizedBox(height: 16),
+
                       _buildDescription(),
 
                       const SizedBox(height: 16),
@@ -300,8 +368,11 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   // SUMMARY
   // ============================================================
 
-  Widget _buildSummary() {
-    final statusColor = _statusColor(widget.request.currentStatus);
+  Widget _buildSummary(FeedbackDetails details) {
+    final status = details.histories.isNotEmpty
+        ? details.histories.last.status
+        : widget.request.currentStatus;
+    final statusColor = _statusColor(status);
 
     final isPublic =
         widget.request.postStatus == RequestService.postStatusPublic;
@@ -352,8 +423,8 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                   runSpacing: 10,
                   children: [
                     _StatusBadge(
-                      icon: _statusIcon(widget.request.currentStatus),
-                      text: _statusLabel(widget.request.currentStatus),
+                      icon: _statusIcon(status),
+                      text: _statusLabel(status),
                       color: statusColor,
                     ),
 
@@ -604,15 +675,16 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
                 final bool isLast = index == details.histories.length - 1;
 
-                final color = _statusColor(item.status);
+                final color = _historyColor(item.status);
 
                 return _TimelineItem(
-                  title: _statusLabel(item.status),
-                  date: _date(item.createAt),
-                  color: color,
-                  icon: _statusIcon(item.status),
-                  isLast: isLast,
-                );
+  title: _historyTitle(item),
+  detail: _historyDescription(item),
+  date: _date(item.createAt),
+  color: color,
+  icon: _statusIcon(item.status),
+  isLast: isLast,
+);
               }),
             ),
     );
@@ -1191,18 +1263,18 @@ class _TimelineItem extends StatelessWidget {
   final String title;
   final String date;
   final Color color;
+  final String detail;
   final IconData icon;
   final bool isLast;
 
   const _TimelineItem({
-    required this.title,
-    required this.date,
-    required this.color,
-    required this.icon,
-    required this.isLast,
-  });
-
-  static const Color textPrimary = Color(0xFF172B4D);
+  required this.title,
+  required this.detail,
+  required this.date,
+  required this.color,
+  required this.icon,
+  required this.isLast,
+});
 
   static const Color textSecondary = Color(0xFF667085);
 
@@ -1212,78 +1284,53 @@ class _TimelineItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 38,
-            child: Column(
-              children: [
-                Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: .10),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, size: 16, color: color),
-                ),
-
-                if (!isLast)
-                  Expanded(
-                    child: Container(
-                      width: 2,
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      color: color.withValues(alpha: .18),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          const SizedBox(width: 10),
-
           Expanded(
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 14),
-              padding: const EdgeInsets.all(13),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE8EEF5)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                      color: textPrimary,
-                    ),
-                  ),
-
-                  const SizedBox(height: 5),
-
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.schedule_outlined,
-                        size: 13,
-                        color: textSecondary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        date,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+  child: Padding(
+    padding: const EdgeInsets.only(
+      left: 10,
+      top: 4,
+      bottom: 20,
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Tên trạng thái
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: color,
           ),
+        ),
+
+        const SizedBox(height: 4),
+
+        // Nội dung chi tiết của trạng thái
+        Text(
+          detail,
+          style: const TextStyle(
+            fontSize: 12.5,
+            height: 1.5,
+            color: textSecondary,
+          ),
+        ),
+
+        const SizedBox(height: 4),
+
+        // Thời gian ghi nhận
+        Text(
+          date,
+          style: const TextStyle(
+            fontSize: 11,
+            color: Color(0xFF98A2B3),
+          ),
+        ),
+      ],
+    ),
+  ),
+),
+
         ],
       ),
     );

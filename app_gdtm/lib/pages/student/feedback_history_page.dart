@@ -37,6 +37,7 @@ class _FeedbackHistoryPageState extends State<FeedbackHistoryPage> {
   final _searchController = TextEditingController();
 
   List<Request> _requests = [];
+  final Map<String, String?> _latestStatuses = {};
   List<Department> _departments = [];
   List<Category> _categories = [];
 
@@ -100,11 +101,26 @@ class _FeedbackHistoryPageState extends State<FeedbackHistoryPage> {
         DepartmentService().getDepartments(),
         CategoryService().getActiveCategories(),
       ]);
+      final requests = results[0] as List<Request>;
+      final latestStatuses = <String, String?>{};
+      await Future.wait(
+        requests.map((request) async {
+          final requestId = request.id;
+          if (requestId == null || requestId.isEmpty) return;
+          final details = await _requestService.getFeedbackDetails(request);
+          if (details.histories.isNotEmpty) {
+            latestStatuses[requestId] = details.histories.last.status;
+          }
+        }),
+      );
 
       if (!mounted) return;
 
       setState(() {
-        _requests = results[0] as List<Request>;
+        _requests = requests;
+        _latestStatuses
+          ..clear()
+          ..addAll(latestStatuses);
         _departments = results[1] as List<Department>;
         _categories = results[2] as List<Category>;
         _loading = false;
@@ -182,7 +198,8 @@ class _FeedbackHistoryPageState extends State<FeedbackHistoryPage> {
           (request.subject ?? '').toLowerCase().contains(keyword) ||
           (request.description ?? '').toLowerCase().contains(keyword);
 
-      final matchesStatus = _status.isEmpty || request.currentStatus == _status;
+      final status = _latestStatus(request);
+      final matchesStatus = _status.isEmpty || status == _status;
 
       final matchesDepartment =
           _departmentId.isEmpty || request.departmentId == _departmentId;
@@ -195,6 +212,10 @@ class _FeedbackHistoryPageState extends State<FeedbackHistoryPage> {
           matchesDepartment &&
           matchesCategory;
     }).toList();
+  }
+
+  String? _latestStatus(Request request) {
+    return _latestStatuses[request.id] ?? request.currentStatus;
   }
 
   // ============================================================
@@ -286,7 +307,7 @@ class _FeedbackHistoryPageState extends State<FeedbackHistoryPage> {
     };
 
     final values = _requests
-        .map((request) => request.currentStatus)
+        .map(_latestStatus)
         .whereType<String>()
         .toSet();
 
@@ -727,7 +748,8 @@ class _FeedbackHistoryPageState extends State<FeedbackHistoryPage> {
   // ============================================================
 
   Widget _buildCard(Request request) {
-    final color = _statusColor(request.currentStatus);
+    final status = _latestStatus(request);
+    final color = _statusColor(status);
 
     final categories = request.categoryIds
         .map(
@@ -786,9 +808,9 @@ class _FeedbackHistoryPageState extends State<FeedbackHistoryPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _StatusPill(
-                      label: _statusLabel(request.currentStatus),
+                      label: _statusLabel(status),
                       color: color,
-                      icon: _statusIcon(request.currentStatus),
+                      icon: _statusIcon(status),
                     ),
 
                     const Spacer(),
