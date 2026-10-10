@@ -46,6 +46,7 @@ class FeedbackDetailPage extends StatefulWidget {
 
 class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
   final RequestService _requestService = RequestService();
+  final Map<String, String> _historyDepartmentNames = {};
 
   bool _isLoading = true;
   bool _isUpdatingStatus = false;
@@ -126,6 +127,109 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
     super.dispose();
   }
 
+Future<void> _loadHistoryDepartmentNames(
+  List<RequestStatusHistory> histories,
+) async {
+  final requestId = _request.id;
+
+  if (requestId == null || requestId.isEmpty) return;
+
+  try {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('notification')
+        .where('requestId', isEqualTo: requestId)
+        .where('notificationType', isEqualTo: 'REQUEST_FORWARDED')
+        .get();
+
+    final forwardingEvents = snapshot.docs.map((doc) {
+      final data = doc.data();
+
+      return {
+        'time': (data['createAt'] as Timestamp?)?.toDate(),
+        'from': (data['fromDepartmentId'] ?? '').toString(),
+        'to': (data['departmentId'] ?? '').toString(),
+      };
+    }).toList()
+      ..sort((a, b) {
+        final timeA = a['time'] as DateTime?;
+        final timeB = b['time'] as DateTime?;
+
+        return (timeA ?? DateTime(0))
+            .compareTo(timeB ?? DateTime(0));
+      });
+
+    final departmentSnapshot = await FirebaseFirestore.instance
+        .collection('department')
+        .get();
+
+    final departmentNames = <String, String>{};
+
+    for (final doc in departmentSnapshot.docs) {
+      final department = Department.fromFirestore(doc);
+      final id = department.id?.trim() ?? '';
+      final name = department.name?.trim() ?? '';
+
+      if (id.isNotEmpty && name.isNotEmpty) {
+        departmentNames[id] = name;
+      }
+    }
+
+    final sortedHistories =
+        List<RequestStatusHistory>.from(histories)
+          ..sort((a, b) =>
+              (a.createAt ?? DateTime(0))
+                  .compareTo(b.createAt ?? DateTime(0)));
+
+    // Nếu đã từng chuyển tiếp, phòng ban ban đầu được lấy
+    // từ thông tin chuyển tiếp đầu tiên.
+    String currentDepartmentId =
+        forwardingEvents.isNotEmpty
+            ? forwardingEvents.first['from'] as String
+            : (_request.departmentId ?? '');
+
+    var forwardingIndex = 0;
+    final result = <String, String>{};
+
+    for (final history in sortedHistories) {
+      final historyId = history.id;
+      if (historyId == null || historyId.isEmpty) continue;
+
+      if (history.status == 'FORWARDING') {
+        if (forwardingIndex < forwardingEvents.length) {
+          final event = forwardingEvents[forwardingIndex];
+          final toDepartmentId = event['to'] as String;
+
+          currentDepartmentId = toDepartmentId;
+          forwardingIndex++;
+
+          final departmentName =
+              departmentNames[toDepartmentId];
+
+          if (departmentName != null) {
+            result[historyId] = departmentName;
+          }
+        }
+      } else {
+        final departmentName =
+            departmentNames[currentDepartmentId];
+
+        if (departmentName != null) {
+          result[historyId] = departmentName;
+        }
+      }
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _historyDepartmentNames
+        ..clear()
+        ..addAll(result);
+    });
+  } catch (e) {
+    debugPrint('LOAD HISTORY DEPARTMENTS ERROR: $e');
+  }
+}
   // ============================================================
   // LOAD DETAIL
   // ============================================================
@@ -146,6 +250,8 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
       ]);
 
       final details = results[0] as FeedbackDetails;
+
+      await _loadHistoryDepartmentNames(details.histories);
 
       if (!mounted) return;
 
@@ -252,6 +358,42 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
       debugPrint('LOAD CATEGORY ERROR: $e');
     }
   }
+
+  String _historyStatusLabel(RequestStatusHistory history) {
+  final status = history.status ?? 'UNKNOWN';
+  final departmentName =
+      _historyDepartmentNames[history.id];
+
+  switch (status) {
+    case 'PENDING':
+      return departmentName != null
+          ? 'Đang chờ tiếp nhận bởi $departmentName'
+          : 'Đang chờ tiếp nhận';
+
+    case 'APPROVED':
+      return departmentName != null
+          ? 'Đang xử lý bởi $departmentName'
+          : 'Đang xử lý';
+
+    case 'RESOLVED':
+      return departmentName != null
+          ? 'Đã xử lý bởi $departmentName'
+          : 'Đã xử lý';
+
+    case 'FORWARDING':
+      return departmentName != null
+          ? 'Đã được chuyển tiếp đến $departmentName'
+          : 'Đã được chuyển tiếp';
+
+    case 'REJECTED':
+      return departmentName != null
+          ? 'Đã từ chối bởi $departmentName'
+          : 'Đã từ chối';
+
+    default:
+      return _statusLabel(status);
+  }
+}
 
   // ============================================================
   // LOAD DEPARTMENTS
@@ -1094,7 +1236,7 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _statusLabel(status),
+                    _historyStatusLabel(history),
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
