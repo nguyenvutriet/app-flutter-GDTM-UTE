@@ -14,6 +14,8 @@ import 'package:app_gdtm/widgets/pdf_view_page.dart';
 import 'package:app_gdtm/widgets/attachment_utils.dart';
 import 'package:app_gdtm/widgets/image_view_page.dart';
 import 'package:app_gdtm/widgets/pdf_view.dart';
+import 'package:app_gdtm/services/forum_service.dart';
+import 'package:app_gdtm/pages/staff/staff_post_detail_page.dart';
 
 class FeedbackDetailPage extends StatefulWidget {
   final Request request;
@@ -1127,6 +1129,52 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
     );
   }
 
+  
+Future<void> _openForumPost() async {
+  final postId = _request.id?.trim();
+
+  if (postId == null || postId.isEmpty) {
+    _showMessage('Không tìm thấy mã bài đăng.', isError: true);
+    return;
+  }
+
+  final service = ForumService(
+    currentUserId: () => widget.staffUserId,
+  );
+
+  try {
+    final post = await service.getPostDetail(postId);
+
+    if (!mounted) return;
+
+    if (post == null) {
+      _showMessage(
+        'Bài đăng không còn tồn tại hoặc đã bị ẩn.',
+        isError: true,
+      );
+      return;
+    }
+
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => StaffPostDetailPage(
+          initialPost: post,
+          service: service,
+          canReport: false,
+        ),
+      ),
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    _showMessage(
+      'Không thể mở bài đăng: $e',
+      isError: true,
+    );
+  }
+}
+
   // ============================================================
   // CONVERSATION
   // ============================================================
@@ -1146,9 +1194,10 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
     if (mounted) await _loadDetails();
   }
 
-  Widget _buildConversationSection() {
-    final conversations = _details.conversations;
-
+  
+Widget _buildConversationSection() {
+  // Nếu góp ý đã đăng công khai lên diễn đàn
+  if (_request.postStatus == RequestService.postStatusPublic) {
     return Card(
       elevation: 2,
       child: Padding(
@@ -1158,33 +1207,32 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
           children: [
             const Row(
               children: [
-                Icon(Icons.forum_outlined),
+                Icon(Icons.public, color: Color(0xFF1877F2)),
                 SizedBox(width: 8),
-                Text(
-                  'Trao đổi',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                Expanded(
+                  child: Text(
+                    'Góp ý đã đăng lên diễn đàn',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ),
-
             const SizedBox(height: 8),
-
             Text(
-              conversations.isEmpty
-                  ? 'Chưa có cuộc trao đổi nào.'
-                  : 'Có ${conversations.length} '
-                        'cuộc trao đổi.',
+              'Góp ý này đã được chia sẻ công khai. '
+              'Nhấn bên dưới để xem bài viết và bình luận.',
               style: TextStyle(color: Colors.grey.shade700),
             ),
-
             const SizedBox(height: 12),
-
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _openMessages,
-                icon: const Icon(Icons.forum_outlined),
-                label: const Text('Mở hộp thoại chat'),
+              child: ElevatedButton.icon(
+                onPressed: _openForumPost,
+                icon: const Icon(Icons.open_in_new),
+                label: const Text('Xem bài đăng'),
               ),
             ),
           ],
@@ -1192,6 +1240,52 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
       ),
     );
   }
+
+  // Góp ý riêng tư: giữ nguyên chức năng trao đổi
+  final conversations = _details.conversations;
+
+  return Card(
+    elevation: 2,
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.forum_outlined),
+              SizedBox(width: 8),
+              Text(
+                'Trao đổi',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            conversations.isEmpty
+                ? 'Chưa có cuộc trao đổi nào.'
+                : 'Có ${conversations.length} cuộc trao đổi.',
+            style: TextStyle(color: Colors.grey.shade700),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _openMessages,
+              icon: const Icon(Icons.forum_outlined),
+              label: const Text('Mở hộp thoại chat'),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 
   Widget _buildConversationItem(ClarificationConversation conversation) {
     final messages = conversation.messages ?? [];
