@@ -1221,12 +1221,11 @@ class _StaffListPageState extends State<StaffListPage> {
                 children: [
 
                   _miniInfo(
-
-                    Icons.person_outline,
-
-                    request.user?.fullName ?? request.userId ?? 'Người gửi',
-
-                  ),
+                      Icons.person_outline,
+                      request.postStatus == RequestService.postStatusPublic
+                          ? (request.user?.fullName ?? request.userId ?? 'Người gửi')
+                          : 'ẩn danh',
+                    ),
 
                   if ((request.location ?? '').trim().isNotEmpty)
 
