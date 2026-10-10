@@ -669,15 +669,18 @@ class _FeedbackDetailPageState extends State<FeedbackDetailPage> {
 
             const SizedBox(height: 12),
 
+            
             _buildInfoRow(
               icon: Icons.person_outline,
               title: 'Người gửi',
-              value:
-                  _senderFullName ??
-                  request.user?.fullName ??
-                  request.userId ??
-                  'Không có',
+              value: _request.postStatus == RequestService.postStatusPublic
+                  ? (_senderFullName ??
+                      request.user?.fullName ??
+                      request.userId ??
+                      'Không có')
+                  : 'ẩn danh',
             ),
+
 
             const SizedBox(height: 12),
 
