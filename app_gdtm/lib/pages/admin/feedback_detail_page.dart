@@ -7,8 +7,11 @@ import 'package:app_gdtm/models/FileAttachment.dart';
 import 'package:app_gdtm/models/Request.dart';
 import 'package:app_gdtm/models/RequestStatusHistory.dart';
 import 'package:app_gdtm/services/RequestService.dart';
-import 'package:app_gdtm/widgets/post_link.dart';
+import 'package:app_gdtm/services/conversation_chat_service.dart';
+import 'package:app_gdtm/widgets/attachment_utils.dart';
 import 'package:app_gdtm/widgets/pdf_view.dart';
+import 'package:app_gdtm/widgets/pdf_viewer_page.dart';
+import 'package:app_gdtm/widgets/post_link.dart';
 
 /// Chi tiết góp ý dành cho ADMIN (chỉ xem / giám sát).
 /// Bố cục mobile: Thông tin chính -> Người gửi -> Lịch sử trạng thái
@@ -253,134 +256,140 @@ class _AdminFeedbackDetailPageState extends State<AdminFeedbackDetailPage> {
         .showSnackBar(SnackBar(content: Text(msg)));
   }
 
-Future<void> _openAttachment(FileAttachment a) async {
-  final url = a.fileUrl?.trim();
+  // ============================================================
+  // OPEN ATTACHMENT (PDF / ảnh xem trong app, file khác mở ngoài)
+  // ============================================================
 
-  if (url == null || url.isEmpty) {
-    _toast('Không tìm thấy đường dẫn tệp.');
-    return;
-  }
+  Future<void> _openAttachment(FileAttachment a) async {
+    final url = a.fileUrl?.trim();
 
-  final uri = Uri.tryParse(url);
+    if (url == null || url.isEmpty) {
+      _toast('Không tìm thấy đường dẫn tệp.');
+      return;
+    }
 
-  if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
-    _toast('Đường dẫn file không hợp lệ.');
-    return;
-  }
+    final uri = Uri.tryParse(url);
 
-  final fileName = (a.filename ?? '').toLowerCase();
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      _toast('Đường dẫn file không hợp lệ.');
+      return;
+    }
 
-  // Lấy extension từ tên file, nếu không có thì lấy từ URL
-  final extension = fileName.contains('.')
-      ? fileName.split('.').last
-      : uri.path.toLowerCase().split('.').last;
+    final fileName = (a.filename ?? '').toLowerCase();
 
-  final isPdf = extension == 'pdf';
-  final isImage =
-      {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'}.contains(extension);
+    // Lấy extension từ tên file, nếu không có thì lấy từ URL
+    final extension = fileName.contains('.')
+        ? fileName.split('.').last
+        : uri.path.toLowerCase().split('.').last;
 
-  // PDF / ẢNH -> xem ngay trong app
-  if (isPdf || isImage) {
-    final Widget preview = isPdf
-        ? PdfView(url: url)
-        : InteractiveViewer(
-            minScale: 0.5,
-            maxScale: 5.0,
-            child: Image.network(
-              url,
-              fit: BoxFit.contain,
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) return child;
-                return const Center(child: CircularProgressIndicator());
-              },
-              errorBuilder: (context, error, stackTrace) {
-                return const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.broken_image_outlined,
-                          size: 50, color: Colors.grey),
-                      SizedBox(height: 10),
-                      Text('Không thể tải ảnh.',
-                          style: TextStyle(color: Colors.grey)),
-                    ],
+    final isPdfFile = extension == 'pdf';
+    final isImage =
+        {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'}.contains(extension);
+
+    // PDF / ẢNH -> xem ngay trong app
+    if (isPdfFile || isImage) {
+      final Widget preview = isPdfFile
+          ? PdfView(url: url)
+          : InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 5.0,
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return const Center(child: CircularProgressIndicator());
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.broken_image_outlined,
+                            size: 50, color: Colors.grey),
+                        SizedBox(height: 10),
+                        Text('Không thể tải ảnh.',
+                            style: TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            );
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (dialogContext) {
+          return Dialog(
+            insetPadding: const EdgeInsets.all(12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: SizedBox(
+              width: MediaQuery.of(context).size.width * 0.96,
+              height: MediaQuery.of(context).size.height * 0.92,
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(16)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isPdfFile
+                              ? Icons.picture_as_pdf
+                              : Icons.image_outlined,
+                          color: hcmuteBlue,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            a.filename ?? 'Tệp đính kèm',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 15),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Đóng',
+                          onPressed: () => Navigator.pop(dialogContext),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              },
+                  const Divider(height: 1),
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      color: isImage ? Colors.black : Colors.white,
+                      child: preview,
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
+        },
+      );
 
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return Dialog(
-          insetPadding: const EdgeInsets.all(12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: SizedBox(
-            width: MediaQuery.of(context).size.width * 0.96,
-            height: MediaQuery.of(context).size.height * 0.92,
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(16)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isPdf ? Icons.picture_as_pdf : Icons.image_outlined,
-                        color: hcmuteBlue,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          a.filename ?? 'Tệp đính kèm',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 15),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Đóng',
-                        onPressed: () => Navigator.pop(dialogContext),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: Container(
-                    width: double.infinity,
-                    color: isImage ? Colors.black : Colors.white,
-                    child: preview,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+      return;
+    }
 
-    return;
+    // Word / Excel / file khác -> mở ứng dụng bên ngoài
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) _toast('Không thể mở file.');
+    } catch (e) {
+      _toast('Không thể mở file: $e');
+    }
   }
-
-  // Word / Excel / file khác -> mở ứng dụng bên ngoài
-  try {
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!ok) _toast('Không thể mở file.');
-  } catch (e) {
-    _toast('Không thể mở file: $e');
-  }
-}
 
   // ============================================================
   // BUILD
@@ -1122,6 +1131,7 @@ Future<void> _openAttachment(FileAttachment a) async {
       context: context,
       builder: (_) => _ConversationDialog(
         conversation: c,
+        requestId: _request.id ?? '',
         studentId: _request.userId?.trim() ?? '',
         studentName: student,
       ),
@@ -1152,22 +1162,26 @@ class _ChatMessage {
   final DateTime? time;
   final String senderId;
   final String receiverId;
+  final List<FileAttachment> attachments;
 
   const _ChatMessage({
     required this.content,
     required this.time,
     required this.senderId,
     required this.receiverId,
+    this.attachments = const [],
   });
 }
 
 class _ConversationDialog extends StatefulWidget {
   final ClarificationConversation conversation;
+  final String requestId;
   final String studentId;
   final String studentName;
 
   const _ConversationDialog({
     required this.conversation,
+    required this.requestId,
     required this.studentId,
     required this.studentName,
   });
@@ -1204,24 +1218,57 @@ class _ConversationDialogState extends State<_ConversationDialog> {
     try {
       final convId = widget.conversation.id;
       if (convId != null && convId.isNotEmpty) {
-        final snap = await FirebaseFirestore.instance
-            .collection('message')
-            .where('clarificationConversationId', isEqualTo: convId)
-            .get();
+        List<_ChatMessage> list = [];
 
-        final list = <_ChatMessage>[];
-        for (final doc in snap.docs) {
-          final d = doc.data();
-          final sender = (d['senderId'] ?? '').toString().trim();
-          final receiver = (d['receiverId'] ?? '').toString().trim();
-          final ts = d['createAt'];
-          list.add(_ChatMessage(
-            content: (d['content'] ?? '').toString(),
-            time: ts is Timestamp ? ts.toDate() : null,
-            senderId: sender,
-            receiverId: receiver,
-          ));
+        // Cách 1: dùng service giống staff (có kèm file đính kèm)
+        try {
+          final service = ConversationChatService();
+          final convs =
+              await service.watchConversations(widget.requestId).first;
+
+          ConversationInfo? info;
+          for (final c in convs) {
+            if (c.docId == convId) {
+              info = c;
+              break;
+            }
+          }
+
+          if (info != null) {
+            final msgs = await service.watchMessages(info).first;
+            list = msgs
+                .map((m) => _ChatMessage(
+                      content: m.content,
+                      time: m.createAt,
+                      senderId: m.senderId,
+                      receiverId: '',
+                      attachments: m.attachments,
+                    ))
+                .toList();
+          }
+        } catch (e) {
+          debugPrint('ADMIN LOAD VIA SERVICE ERROR: $e');
         }
+
+        // Cách 2 (dự phòng): đọc thẳng collection message, không có ảnh
+        if (list.isEmpty) {
+          final snap = await FirebaseFirestore.instance
+              .collection('message')
+              .where('clarificationConversationId', isEqualTo: convId)
+              .get();
+
+          for (final doc in snap.docs) {
+            final d = doc.data();
+            final ts = d['createAt'];
+            list.add(_ChatMessage(
+              content: (d['content'] ?? '').toString(),
+              time: ts is Timestamp ? ts.toDate() : null,
+              senderId: (d['senderId'] ?? '').toString().trim(),
+              receiverId: (d['receiverId'] ?? '').toString().trim(),
+            ));
+          }
+        }
+
         list.sort((a, b) {
           final x = a.time, y = b.time;
           if (x == null && y == null) return 0;
@@ -1254,7 +1301,7 @@ class _ConversationDialogState extends State<_ConversationDialog> {
       debugPrint('ADMIN LOAD CONVERSATION ERROR: $e');
     }
 
-    // Dự phòng nếu query lỗi: dùng tin nhắn đã có sẵn trong model.
+    // Dự phòng cuối: dùng tin nhắn có sẵn trong model.
     if (_messages.isEmpty) {
       _messages = (widget.conversation.messages ?? [])
           .map((m) => _ChatMessage(
@@ -1347,6 +1394,95 @@ class _ConversationDialogState extends State<_ConversationDialog> {
     );
   }
 
+  // ------------------------------------------------------------
+  // FILE ĐÍNH KÈM TRONG TIN NHẮN
+  // ------------------------------------------------------------
+
+  Widget _attachment(FileAttachment file) {
+    final url = file.fileUrl?.trim() ?? '';
+    final isImage = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'}
+        .contains(attachmentExt(file));
+
+    if (isImage && url.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: GestureDetector(
+          onTap: () => showDialog<void>(
+            context: context,
+            builder: (_) => Dialog(
+              child: InteractiveViewer(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Text('Không tải được hình ảnh.'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              url,
+              width: 220,
+              height: 150,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _fileLink(file),
+            ),
+          ),
+        ),
+      );
+    }
+    return _fileLink(file);
+  }
+
+  Widget _fileLink(FileAttachment file) {
+    final url = file.fileUrl?.trim() ?? '';
+    return InkWell(
+      onTap: url.isEmpty
+          ? null
+          : () {
+              if (isPdf(file)) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PdfViewerPage(
+                      url: url,
+                      title: file.filename ?? 'Tài liệu PDF',
+                    ),
+                  ),
+                );
+              } else {
+                openUrl(context, url);
+              }
+            },
+      child: Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(kindIcon(attachmentKind(file)),
+                size: 19, color: kindColor(attachmentKind(file))),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                file.filename ?? 'Tệp đính kèm',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: hcmuteBlue,
+                  fontSize: 13,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _bubble(_ChatMessage m) {
     final student = _isStudent(m);
     final color = student ? const Color(0xFFD97706) : hcmuteBlue;
@@ -1374,9 +1510,11 @@ class _ConversationDialogState extends State<_ConversationDialog> {
                   fontSize: 11.5, color: color, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 4),
-            Text(m.content,
-                style: const TextStyle(
-                    fontSize: 14, color: textPrimary, height: 1.3)),
+            if (m.content.trim().isNotEmpty)
+              Text(m.content,
+                  style: const TextStyle(
+                      fontSize: 14, color: textPrimary, height: 1.3)),
+            ...m.attachments.map(_attachment),
             const SizedBox(height: 5),
             Text(_time(m.time),
                 style:
