@@ -8,6 +8,7 @@ import 'package:app_gdtm/models/Request.dart';
 import 'package:app_gdtm/models/RequestStatusHistory.dart';
 import 'package:app_gdtm/services/RequestService.dart';
 import 'package:app_gdtm/widgets/post_link.dart';
+import 'package:app_gdtm/widgets/pdf_view.dart';
 
 /// Chi tiết góp ý dành cho ADMIN (chỉ xem / giám sát).
 /// Bố cục mobile: Thông tin chính -> Người gửi -> Lịch sử trạng thái
@@ -252,19 +253,134 @@ class _AdminFeedbackDetailPageState extends State<AdminFeedbackDetailPage> {
         .showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  Future<void> _openAttachment(FileAttachment a) async {
-    final uri = Uri.tryParse(a.fileUrl?.trim() ?? '');
-    if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
-      _toast('Đường dẫn file không hợp lệ.');
-      return;
-    }
-    try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!ok) _toast('Không thể mở file.');
-    } catch (e) {
-      _toast('Không thể mở file: $e');
-    }
+Future<void> _openAttachment(FileAttachment a) async {
+  final url = a.fileUrl?.trim();
+
+  if (url == null || url.isEmpty) {
+    _toast('Không tìm thấy đường dẫn tệp.');
+    return;
   }
+
+  final uri = Uri.tryParse(url);
+
+  if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+    _toast('Đường dẫn file không hợp lệ.');
+    return;
+  }
+
+  final fileName = (a.filename ?? '').toLowerCase();
+
+  // Lấy extension từ tên file, nếu không có thì lấy từ URL
+  final extension = fileName.contains('.')
+      ? fileName.split('.').last
+      : uri.path.toLowerCase().split('.').last;
+
+  final isPdf = extension == 'pdf';
+  final isImage =
+      {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'}.contains(extension);
+
+  // PDF / ẢNH -> xem ngay trong app
+  if (isPdf || isImage) {
+    final Widget preview = isPdf
+        ? PdfView(url: url)
+        : InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 5.0,
+            child: Image.network(
+              url,
+              fit: BoxFit.contain,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return const Center(child: CircularProgressIndicator());
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.broken_image_outlined,
+                          size: 50, color: Colors.grey),
+                      SizedBox(height: 10),
+                      Text('Không thể tải ảnh.',
+                          style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                );
+              },
+            ),
+          );
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          insetPadding: const EdgeInsets.all(12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: SizedBox(
+            width: MediaQuery.of(context).size.width * 0.96,
+            height: MediaQuery.of(context).size.height * 0.92,
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(16)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isPdf ? Icons.picture_as_pdf : Icons.image_outlined,
+                        color: hcmuteBlue,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          a.filename ?? 'Tệp đính kèm',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 15),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Đóng',
+                        onPressed: () => Navigator.pop(dialogContext),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    color: isImage ? Colors.black : Colors.white,
+                    child: preview,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    return;
+  }
+
+  // Word / Excel / file khác -> mở ứng dụng bên ngoài
+  try {
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok) _toast('Không thể mở file.');
+  } catch (e) {
+    _toast('Không thể mở file: $e');
+  }
+}
 
   // ============================================================
   // BUILD
