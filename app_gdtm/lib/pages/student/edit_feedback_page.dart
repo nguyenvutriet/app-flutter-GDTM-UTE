@@ -104,31 +104,47 @@ class _EditFeedbackPageState extends State<EditFeedbackPage> {
     }
   }
 
-  Future<void> _pickFiles() async {
-    final result = await FilePicker.pickFiles(
-    );
-    if (result.isEmpty) return;
-    final files = <PlatformFile>[];
-    var total = 0;
-    for (final file in result) {
-      if (file.size > RequestService.maxFileBytes) {
-        setState(() => _error = 'Mỗi tệp không được vượt quá 20MB.');
-        return;
-      }
-      total += file.size;
-      files.add(file);
-    }
-    if (total > RequestService.maxTotalBytes) {
-      setState(() => _error = 'Tổng dung lượng tệp không được vượt quá 40MB.');
+  
+Future<void> _pickFiles() async {
+  final result = await FilePicker.pickFiles();
+
+  if (result.isEmpty) return;
+
+  // Giữ lại các tệp đã chọn trước đó
+  final newFiles = <PlatformFile>[];
+  var total = _files.fold<int>(
+    0,
+    (sum, file) => sum + file.size,
+  );
+
+  for (final file in result) {
+    // Không cho phép một tệp vượt quá 20 MB
+    if (file.size > RequestService.maxFileBytes) {
+      setState(() {
+        _error = 'Mỗi tệp không được vượt quá 20MB.';
+      });
       return;
     }
-    setState(() {
-      _files
-        ..clear()
-        ..addAll(files);
-      _error = null;
-    });
+
+    total += file.size;
+    newFiles.add(file);
   }
+
+  // Tổng dung lượng các tệp không được vượt quá 40 MB
+  if (total > RequestService.maxTotalBytes) {
+    setState(() {
+      _error = 'Tổng dung lượng tệp không được vượt quá 40MB.';
+    });
+    return;
+  }
+
+  setState(() {
+    // Thêm vào danh sách hiện tại, không xóa tệp cũ
+    _files.addAll(newFiles);
+    _error = null;
+  });
+}
+
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate() || _saving || _loadingFiles) return;
