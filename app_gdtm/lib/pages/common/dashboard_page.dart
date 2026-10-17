@@ -521,15 +521,22 @@ class _DashboardPageState extends State<DashboardPage> {
     return '';
   }
 
+  /// Đăng xuất: PHẢI đợi signOut() xong rồi mới quay về trang đăng nhập,
+  /// nếu không phiên Google/Firebase chưa kịp xoá thì lần đăng nhập sau
+  /// sẽ bị tự động đăng nhập lại bằng tài khoản cũ.
+  Future<void> _logout() async {
+    await AuthService().signOut();
+    if (!mounted) return;
+    // Quay về trang đăng nhập và xoá toàn bộ lịch sử điều hướng.
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
+  }
+
   void _onMenuSelected(String id) {
     if (id == 'logout') {
-      // Quay về trang đăng nhập và xoá toàn bộ lịch sử điều hướng.
-      // TODO: nếu sau này lưu phiên đăng nhập (token/SharedPreferences) thì xoá ở đây.
-      AuthService().signOut();
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginPage()),
-        (route) => false,
-      );
+      _logout();
       return;
     }
     setState(() {
