@@ -30,46 +30,54 @@ class AnnouncementCard extends StatelessWidget {
     final dept = item.department?.name;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: Colors.white,
-        elevation: 1.5,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
+      child: SizedBox(
+        width: double.infinity, // luôn chiếm toàn bộ chiều ngang
+        child: Material(
+          color: Colors.white,
+          elevation: 1.5,
           borderRadius: BorderRadius.circular(8),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(item.title,
-                  style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary)),
-              const SizedBox(height: 8),
-              Wrap(spacing: 14, runSpacing: 4, children: [
-                _meta(Icons.person_outline, item.authorName),
-                if (dept != null && dept.isNotEmpty) _meta(Icons.apartment, dept),
-                _meta(Icons.schedule, formatDateTime(item.date)),
-              ]),
-              const SizedBox(height: 10),
-              Text(item.content,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14.5, height: 1.35)),
-              if (item.attachments.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Row(children: [
-                  for (final a in item.attachments.take(4))
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: Icon(kindIcon(attachmentKind(a)),
-                          size: 18, color: kindColor(attachmentKind(a))),
-                    ),
-                  Text('${item.attachments.length} tệp đính kèm',
-                      style: const TextStyle(fontSize: 12.5, color: Colors.black54)),
-                ]),
-              ],
-            ]),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item.title,
+                      style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary)),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 14, runSpacing: 4, children: [
+                    _meta(Icons.person_outline, item.authorName),
+                    if (dept != null && dept.isNotEmpty)
+                      _meta(Icons.apartment, dept),
+                    _meta(Icons.schedule, formatDateTime(item.date)),
+                  ]),
+                  const SizedBox(height: 10),
+                  Text(item.content,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14.5, height: 1.35)),
+                  if (item.attachments.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      for (final a in item.attachments.take(4))
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: Icon(kindIcon(attachmentKind(a)),
+                              size: 18, color: kindColor(attachmentKind(a))),
+                        ),
+                      Text('${item.attachments.length} tệp đính kèm',
+                          style: const TextStyle(
+                              fontSize: 12.5, color: Colors.black54)),
+                    ]),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),

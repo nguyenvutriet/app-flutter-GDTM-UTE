@@ -296,17 +296,36 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   Future<void> _send() async {
     final text = _ctl.text.trim();
+
     if (text.isEmpty || _sending) return;
+
+    if (text.length > 1000) {
+      _snack('Bình luận không được vượt quá 1.000 ký tự.');
+      return;
+    }
+
     setState(() => _sending = true);
+
     try {
-      await widget.service.addComment(_post.id, text, replyTo: _replyTo);
+      await widget.service.addComment(
+        _post.id,
+        text,
+        replyTo: _replyTo,
+      );
+
       _ctl.clear();
-      if (mounted) setState(() => _replyTo = null);
+
+      if (mounted) {
+        setState(() => _replyTo = null);
+      }
+
       await _reloadComments();
     } catch (e) {
       _snack(e.toString());
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) {
+        setState(() => _sending = false);
+      }
     }
   }
 
@@ -435,16 +454,20 @@ class _PostDetailPageState extends State<PostDetailPage> {
                     focusNode: _focus,
                     minLines: 1,
                     maxLines: 4,
+                    maxLength: 1000,
                     textCapitalization: TextCapitalization.sentences,
                     decoration: InputDecoration(
                       hintText: _replyTo == null
                           ? 'Viết bình luận...'
                           : 'Phản hồi ${_replyTo!.userName}...',
+                      counterText: '',
                       filled: true,
                       fillColor: kFbBg,
                       isDense: true,
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(22),
                         borderSide: BorderSide.none,

@@ -3,6 +3,7 @@
 // và xem lại các thông báo đã đăng.
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:app_gdtm/models/announcement_item.dart';
 import 'package:app_gdtm/utils/file_picker_compat.dart';
@@ -222,8 +223,19 @@ class _ManageNotificationsPageState extends State<ManageNotificationsPage> {
               controller: _titleCtrl,
               enabled: !_submitting,
               maxLength: 200,
+              maxLengthEnforcement: MaxLengthEnforcement.enforced,
               decoration: _decoration('Tiêu đề thông báo'),
-              validator: _requiredValidator,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Vui lòng nhập tiêu đề thông báo.';
+                }
+
+                if (value.length > 200) {
+                  return 'Tiêu đề không được vượt quá 200 ký tự.';
+                }
+
+                return null;
+              },
             ),
             const SizedBox(height: 8),
             _label('Nội dung', required: true),
@@ -232,8 +244,20 @@ class _ManageNotificationsPageState extends State<ManageNotificationsPage> {
               enabled: !_submitting,
               minLines: 6,
               maxLines: 12,
+              maxLength: 20000,
+              maxLengthEnforcement: MaxLengthEnforcement.enforced,  
               decoration: _decoration('Nội dung thông báo...'),
-              validator: _requiredValidator,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Vui lòng nhập nội dung thông báo.';
+                }
+
+                if (value.length > 20000) {
+                  return 'Nội dung không được vượt quá 20.000 ký tự.';
+                }
+
+                return null;
+              },
             ),
             const SizedBox(height: 16),
             _label('Tệp đính kèm (PDF, Word, Excel)'),

@@ -1,6 +1,7 @@
 import 'package:app_gdtm/firebase_options.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:app_gdtm/pages/login/login_page.dart';
 import 'package:app_gdtm/widgets/app_colors.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -40,6 +41,18 @@ class MyApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
+
+      // Ngôn ngữ mặc định tiếng Việt: nhãn pop-up chọn ngày, định dạng dd/MM/yyyy...
+      locale: const Locale('vi', 'VN'),
+      supportedLocales: const [
+        Locale('vi', 'VN'),
+        Locale('en', 'US'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
 
       // Mở app vào trang đăng nhập; đăng nhập xong mới vào DashboardPage theo role
       home: const LoginPage(),

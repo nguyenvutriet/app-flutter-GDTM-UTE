@@ -293,17 +293,26 @@ class _AnnouncementTile extends StatelessWidget {
         ),
         child: InkWell(
           onTap: onTap,
-          child: IntrinsicHeight(
-            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Container(
+          // Dùng Stack thay cho IntrinsicHeight để tránh lệch 1px khi đo chiều cao.
+          child: Stack(
+            children: [
+              // Dải icon bên trái, tự giãn theo chiều cao nội dung.
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
                 width: 44,
-                color: const Color(0xFFE7F3FF),
-                alignment: Alignment.center,
-                child: const Icon(Icons.campaign_outlined, color: kFbBlue),
+                child: Container(
+                  color: const Color(0xFFE7F3FF),
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.campaign_outlined, color: kFbBlue),
+                ),
               ),
-              Expanded(
+              // Nội dung
+              SizedBox(
+                width: double.infinity,
                 child: Padding(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.fromLTRB(54, 10, 10, 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -349,7 +358,7 @@ class _AnnouncementTile extends StatelessWidget {
                   ),
                 ),
               ),
-            ]),
+            ],
           ),
         ),
       ),

@@ -585,18 +585,35 @@ class _ForumPageState extends State<ForumPage> {
 
   Future<void> _pickDateRange() async {
     final now = DateTime.now();
-    final r = await showDateRangePicker(
+    final first = DateTime(2020);
+    final last = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+
+    // 1) Ngày bắt đầu
+    final from = await showDatePicker(
       context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(now.year, now.month, now.day).add(const Duration(days: 1)),
-      initialDateRange: (_fromDate != null && _toDate != null)
-          ? DateTimeRange(start: _fromDate!, end: _toDate!)
-          : null,
+      helpText: 'Chọn ngày bắt đầu',
+      initialDate: _fromDate ?? DateTime(now.year, now.month, now.day),
+      firstDate: first,
+      lastDate: last,
+      initialEntryMode: DatePickerEntryMode.calendar,
     );
-    if (r == null) return;
+    if (from == null || !mounted) return;
+
+    // 2) Ngày kết thúc (không được trước ngày bắt đầu)
+    final initialTo = (_toDate != null && !_toDate!.isBefore(from)) ? _toDate! : from;
+    final to = await showDatePicker(
+      context: context,
+      helpText: 'Chọn ngày kết thúc',
+      initialDate: initialTo,
+      firstDate: from,
+      lastDate: last,
+      initialEntryMode: DatePickerEntryMode.calendar,
+    );
+    if (to == null || !mounted) return;
+
     setState(() {
-      _fromDate = r.start;
-      _toDate = r.end;
+      _fromDate = from;
+      _toDate = to;
     });
     _reloadFromTop();
   }
