@@ -14,6 +14,7 @@ import 'package:app_gdtm/services/forum_service.dart';
 import 'package:app_gdtm/widgets/page_title.dart';
 import 'package:app_gdtm/widgets/attachment_utils.dart';
 import 'package:app_gdtm/widgets/pdf_view.dart';
+import 'package:video_player/video_player.dart';
 
 class FeedbackDetailPage extends StatefulWidget {
   final Request request;
@@ -907,101 +908,125 @@ String _historyDescription(RequestStatusHistory item) {
   // ATTACHMENT PREVIEW
   // ============================================================
 
-  void _showAttachmentPreview(FileAttachment file) {
-    final url = file.fileUrl?.trim();
-    if (url == null || url.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Không tìm thấy đường dẫn tệp.')),
-      );
-      return;
-    }
+  
+void _showAttachmentPreview(FileAttachment file) {
+  final url = file.fileUrl?.trim();
 
-    final uri = Uri.tryParse(url);
-    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đường dẫn tệp không hợp lệ.')),
-      );
-      return;
-    }
+  if (url == null || url.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Không tìm thấy đường dẫn tệp.')),
+    );
+    return;
+  }
 
-    final extension = attachmentExt(file);
-    final isImage = const {
-      'jpg',
-      'jpeg',
-      'png',
-      'gif',
-      'webp',
-      'bmp',
-    }.contains(extension);
-    final isPdfFile = extension == 'pdf';
-    final Widget preview;
+  final uri = Uri.tryParse(url);
 
-    if (isPdfFile) {
-      preview = PdfView(url: url);
-    } else if (isImage) {
-      preview = InteractiveViewer(
-        child: Image.network(
-          url,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => const _AttachmentPreviewError(),
-        ),
-      );
-    } else {
-      preview = _UnsupportedAttachmentPreview(
-        onOpen: () => openUrl(context, url),
-      );
-    }
+  if (uri == null ||
+      (uri.scheme != 'http' && uri.scheme != 'https')) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Đường dẫn tệp không hợp lệ.')),
+    );
+    return;
+  }
 
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => Dialog(
-        insetPadding: const EdgeInsets.all(20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900, maxHeight: 720),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 14, 10, 10),
-                child: Row(
-                  children: [
-                    Icon(
-                      isPdfFile
-                          ? Icons.picture_as_pdf
-                          : isImage
-                          ? Icons.image_outlined
-                          : Icons.insert_drive_file_outlined,
-                      color: hcmuteBlue,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        file.filename ?? 'Tệp đính kèm',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: textPrimary,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Đóng',
-                      onPressed: () => Navigator.pop(dialogContext),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Flexible(child: preview),
-            ],
-          ),
-        ),
+  final extension = attachmentExt(file).toLowerCase();
+
+  final isImage = const {
+    'jpg',
+    'jpeg',
+    'png',
+    'gif',
+    'webp',
+    'bmp',
+  }.contains(extension);
+
+  final isPdfFile = extension == 'pdf';
+  final isVideo = const {
+  'mp4',
+  'm4v',
+  'mov',
+  'webm',
+}.contains(extension);
+
+  final Widget preview;
+
+  if (isPdfFile) {
+    preview = PdfView(url: url);
+  } else if (isImage) {
+    preview = InteractiveViewer(
+      child: Image.network(
+        url,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) =>
+            const _AttachmentPreviewError(),
       ),
     );
+  } else if (isVideo) {
+    preview = _VideoAttachmentPreview(url: url);
+  } else {
+    preview = _UnsupportedAttachmentPreview(
+      onOpen: () => openUrl(context, url),
+    );
   }
+
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) => Dialog(
+      insetPadding: const EdgeInsets.all(20),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: 900,
+          maxHeight: 720,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 10, 10),
+              child: Row(
+                children: [
+                  Icon(
+                    isPdfFile
+                        ? Icons.picture_as_pdf
+                        : isImage
+                            ? Icons.image_outlined
+                            : isVideo
+                                ? Icons.video_library_outlined
+                                : Icons.insert_drive_file_outlined,
+                    color: hcmuteBlue,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      file.filename ?? 'Tệp đính kèm',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: textPrimary,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Đóng',
+                    onPressed: () => Navigator.pop(dialogContext),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Flexible(child: preview),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 }
 
 class _UnsupportedAttachmentPreview extends StatelessWidget {
@@ -1051,6 +1076,232 @@ class _AttachmentPreviewError extends StatelessWidget {
         'Không thể tải bản xem trước của tệp.',
         style: TextStyle(color: Color(0xFF667085)),
       ),
+    );
+  }
+}
+
+
+class _VideoAttachmentPreview extends StatefulWidget {
+  final String url;
+
+  const _VideoAttachmentPreview({
+    required this.url,
+  });
+
+  @override
+  State<_VideoAttachmentPreview> createState() =>
+      _VideoAttachmentPreviewState();
+}
+
+class _VideoAttachmentPreviewState
+    extends State<_VideoAttachmentPreview> {
+  late final VideoPlayerController _controller;
+  late final Future<void> _initializeFuture;
+
+  static const Color hcmuteBlue = Color(0xFF005BAA);
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = VideoPlayerController.networkUrl(
+      Uri.parse(widget.url),
+    );
+
+    _initializeFuture = _initializeVideo();
+    _controller.addListener(_onVideoChanged);
+  }
+
+  Future<void> _initializeVideo() async {
+    await _controller.initialize();
+    await _controller.setLooping(false);
+  }
+
+  void _onVideoChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
+
+    final seconds = duration.inSeconds
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
+
+    final hours = duration.inHours;
+
+    if (hours > 0) {
+      return '$hours:$minutes:$seconds';
+    }
+
+    return '$minutes:$seconds';
+  }
+
+  Future<void> _togglePlayback() async {
+    if (!_controller.value.isInitialized) return;
+
+    if (_controller.value.isPlaying) {
+      await _controller.pause();
+    } else {
+      await _controller.play();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onVideoChanged);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _initializeFuture,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 44,
+                    color: Colors.red,
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    'Không thể phát video. '
+                    'Vui lòng kiểm tra đường dẫn hoặc định dạng tệp.',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        if (snapshot.connectionState != ConnectionState.done ||
+            !_controller.value.isInitialized) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    color: hcmuteBlue,
+                  ),
+                  SizedBox(height: 12),
+                  Text('Đang tải video...'),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final value = _controller.value;
+
+        final duration = value.duration;
+        final position = value.position > duration
+            ? duration
+            : value.position;
+
+        final maxSeconds = duration.inSeconds;
+        final currentSeconds = position.inSeconds
+            .clamp(0, maxSeconds)
+            .toDouble();
+
+        return SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: AspectRatio(
+                    aspectRatio: value.aspectRatio > 0
+                        ? value.aspectRatio
+                        : 16 / 9,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        VideoPlayer(_controller),
+                        if (value.isBuffering)
+                          const CircularProgressIndicator(
+                            color: Colors.white,
+                          ),
+                        if (!value.isPlaying)
+                          IconButton(
+                            tooltip: 'Phát video',
+                            onPressed: _togglePlayback,
+                            iconSize: 64,
+                            color: Colors.white,
+                            icon: const Icon(
+                              Icons.play_circle_fill_rounded,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    IconButton(
+                      tooltip: value.isPlaying
+                          ? 'Tạm dừng'
+                          : 'Phát video',
+                      onPressed: _togglePlayback,
+                      icon: Icon(
+                        value.isPlaying
+                            ? Icons.pause_circle_filled
+                            : Icons.play_circle_fill,
+                        color: hcmuteBlue,
+                        size: 32,
+                      ),
+                    ),
+                    Expanded(
+                      child: maxSeconds > 0
+                          ? VideoProgressIndicator(
+                              _controller,
+                              allowScrubbing: true,
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                              ),
+                              colors: const VideoProgressColors(
+                                playedColor: hcmuteBlue,
+                                bufferedColor: Color(0xFFBBD7F0),
+                                backgroundColor: Color(0xFFE3EAF2),
+                              ),
+                            )
+                          : const LinearProgressIndicator(),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${_formatDuration(position)} / '
+                      '${_formatDuration(duration)}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF667085),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

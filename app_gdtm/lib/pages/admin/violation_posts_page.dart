@@ -1,6 +1,6 @@
 // lib/pages/admin/violation_posts_page.dart
-// Quản lý bài viết vi phạm (admin): thống kê, tìm kiếm, lọc ngày, lọc trạng thái,
-// xem bài viết, duyệt "Không vi phạm" / "Vi phạm — ẩn bài viết".
+// Quản lý bài viết vi phạm (admin): thống kê, tìm kiếm, lọc ngày (1 ngày hoặc khoảng ngày),
+// lọc trạng thái, xem bài viết, duyệt "Không vi phạm" / "Vi phạm — ẩn bài viết".
 // Responsive: >= 900px dạng bảng, nhỏ hơn dạng thẻ. embedded = true: dùng trong AppShell.
 import 'package:flutter/material.dart';
 
@@ -42,6 +42,7 @@ class _ViolationPostsPageState extends State<ViolationPostsPage> {
     ReportStatus.pending: 'Đang chờ',
     ReportStatus.notViolation: 'Không vi phạm',
     ReportStatus.violation: 'Vi phạm',
+    ReportStatus.contentRemoved: 'Nội dung đã xóa',
   };
 
   final TextEditingController _searchCtl = TextEditingController();
@@ -51,6 +52,8 @@ class _ViolationPostsPageState extends State<ViolationPostsPage> {
   String? _error;
   String _keyword = '';
   String _status = 'all';
+
+  /// Lọc ngày: start == end nghĩa là lọc trong đúng 1 ngày.
   DateTimeRange? _range;
   bool _newestFirst = true;
 
@@ -116,22 +119,57 @@ class _ViolationPostsPageState extends State<ViolationPostsPage> {
 
   String _p2(int n) => n.toString().padLeft(2, '0');
   String _date(DateTime d) => '${_p2(d.day)}/${_p2(d.month)}/${d.year}';
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
   String _dateTime(DateTime? d) =>
       d == null ? '' : '${_date(d)} ${_p2(d.hour)}:${_p2(d.minute)}';
 
   // ---------------- Actions ----------------
 
+  /// Chọn 1 ngày hoặc khoảng ngày.
   Future<void> _pickRange() async {
-    final now = DateTime.now();
-    final r = await showDateRangePicker(
+    final mode = await showModalBottomSheet<String>(
       context: context,
-      firstDate: DateTime(2020),
-      lastDate: now.add(const Duration(days: 1)),
-      initialDateRange: _range,
-      helpText: 'Chọn khoảng ngày báo cáo',
-      saveText: 'Áp dụng',
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.today),
+            title: const Text('Chọn một ngày'),
+            onTap: () => Navigator.pop(ctx, 'single'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.date_range),
+            title: const Text('Chọn khoảng ngày'),
+            onTap: () => Navigator.pop(ctx, 'range'),
+          ),
+        ]),
+      ),
     );
-    if (r != null) setState(() => _range = r);
+    if (mode == null || !mounted) return;
+
+    final now = DateTime.now();
+    if (mode == 'single') {
+      final d = await showDatePicker(
+        context: context,
+        initialDate: _range?.start ?? now,
+        firstDate: DateTime(2020),
+        lastDate: now.add(const Duration(days: 1)),
+        helpText: 'Chọn ngày báo cáo',
+        confirmText: 'Áp dụng',
+        cancelText: 'Hủy',
+      );
+      if (d != null) setState(() => _range = DateTimeRange(start: d, end: d));
+    } else {
+      final r = await showDateRangePicker(
+        context: context,
+        firstDate: DateTime(2020),
+        lastDate: now.add(const Duration(days: 1)),
+        initialDateRange: _range,
+        helpText: 'Chọn khoảng ngày báo cáo',
+        saveText: 'Áp dụng',
+      );
+      if (r != null) setState(() => _range = r);
+    }
   }
 
   Future<void> _resolve(PostReportItem r, bool violation) async {
@@ -165,35 +203,35 @@ class _ViolationPostsPageState extends State<ViolationPostsPage> {
   }
 
   /// Ẩn / hiện lại bài viết của một báo cáo đã xử lý.
-  Future<void> _toggleHidden(PostReportItem r) async {
-    final hide = !r.postHidden;
-    if (hide) {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Ẩn bài viết?'),
-          content: const Text(
-              'Bài viết sẽ bị ẩn với mọi người dùng (admin vẫn thấy ở dạng mờ).'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: _red),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Ẩn bài viết'),
-            ),
-          ],
-        ),
-      );
-      if (ok != true) return;
-    }
-    try {
-      await widget.forum.setPostHidden(r.postId, hidden: hide);
-      _toast(hide ? 'Đã ẩn bài viết' : 'Đã hiện lại bài viết');
-      _load(silent: true);
-    } catch (e) {
-      _toast('Lỗi: $e');
-    }
-  }
+  // Future<void> _toggleHidden(PostReportItem r) async {
+  //   final hide = !r.postHidden;
+  //   if (hide) {
+  //     final ok = await showDialog<bool>(
+  //       context: context,
+  //       builder: (ctx) => AlertDialog(
+  //         title: const Text('Ẩn bài viết?'),
+  //         content: const Text(
+  //             'Bài viết sẽ bị ẩn với mọi người dùng (admin vẫn thấy ở dạng mờ).'),
+  //         actions: [
+  //           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+  //           FilledButton(
+  //             style: FilledButton.styleFrom(backgroundColor: _red),
+  //             onPressed: () => Navigator.pop(ctx, true),
+  //             child: const Text('Ẩn bài viết'),
+  //           ),
+  //         ],
+  //       ),
+  //     );
+  //     if (ok != true) return;
+  //   }
+  //   try {
+  //     await widget.forum.setPostHidden(r.postId, hidden: hide);
+  //     _toast(hide ? 'Đã ẩn bài viết' : 'Đã hiện lại bài viết');
+  //     _load(silent: true);
+  //   } catch (e) {
+  //     _toast('Lỗi: $e');
+  //   }
+  // }
 
   Future<void> _openSource(PostReportItem r) async {
     if (r.postId.isEmpty) {
@@ -337,11 +375,16 @@ class _ViolationPostsPageState extends State<ViolationPostsPage> {
       onPressed: _pickRange,
       icon: const Icon(Icons.calendar_today, size: 16, color: kFbText2),
       label: Row(mainAxisSize: MainAxisSize.min, children: [
-        Text(
-          _range == null
-              ? 'Từ ngày – Đến ngày'
-              : '${_date(_range!.start)} – ${_date(_range!.end)}',
-          style: const TextStyle(fontSize: 13),
+        Flexible(
+          child: Text(
+            _range == null
+                ? 'Chọn ngày'
+                : (_sameDay(_range!.start, _range!.end)
+                    ? _date(_range!.start)
+                    : '${_date(_range!.start)} – ${_date(_range!.end)}'),
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 13),
+          ),
         ),
         if (_range != null) ...[
           const SizedBox(width: 6),
@@ -484,14 +527,18 @@ class _ViolationPostsPageState extends State<ViolationPostsPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(children: [
-        Expanded(flex: 5, child: Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: txt(r.postTitle, strike: dim),
-        )),
-        Expanded(flex: 4, child: Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: txt(r.reason, bold: true),
-        )),
+        Expanded(
+            flex: 5,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: txt(r.postTitle, strike: dim),
+            )),
+        Expanded(
+            flex: 4,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: txt(r.reason, bold: true),
+            )),
         Expanded(flex: 2, child: txt(r.reporterName)),
         SizedBox(width: 130, child: txt(_dateTime(r.createdAt))),
         SizedBox(width: 70, child: Center(child: _viewBtn(r))),
@@ -576,6 +623,12 @@ class _ViolationPostsPageState extends State<ViolationPostsPage> {
         bg = _redBg;
         icon = Icons.circle;
         break;
+      case ReportStatus.contentRemoved:
+        label = 'Nội dung đã xóa';
+        fg = Colors.black54;
+        bg = const Color(0xFFEEEEEE);
+        icon = Icons.circle;
+        break;
       default:
         label = 'Đang chờ';
         fg = _orange;
@@ -593,53 +646,35 @@ class _ViolationPostsPageState extends State<ViolationPostsPage> {
     );
   }
 
-  /// Báo cáo đang chờ: duyệt (Không vi phạm / Vi phạm — ẩn).
-  /// Báo cáo đã xử lý: chốt rồi, chỉ còn ẩn / hiện lại bài viết.
+  /// Chỉ báo cáo ĐANG CHỜ mới có menu duyệt. Duyệt xong hoặc bài đã bị xóa thì chốt.
   Widget _menu(PostReportItem r) {
-    final pending = r.status == ReportStatus.pending;
-    // Đã xử lý mà bài viết không còn (bị xóa) thì không còn thao tác nào
-    if (!pending && (!r.postExists)) {
-      return const SizedBox.shrink();
-    }
+    if (r.status != ReportStatus.pending) return const SizedBox.shrink();
+
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, color: kFbText2),
-      tooltip: pending ? 'Duyệt báo cáo' : 'Quản lý bài viết',
+      tooltip: 'Duyệt báo cáo',
       onSelected: (v) {
         if (v == 'ok') _resolve(r, false);
         if (v == 'bad') _resolve(r, true);
-        if (v == 'toggle') _toggleHidden(r);
       },
-      itemBuilder: (_) => pending
-          ? const [
-              PopupMenuItem(
-                value: 'ok',
-                child: Row(children: [
-                  Icon(Icons.check_box, size: 18, color: _green),
-                  SizedBox(width: 10),
-                  Text('Không vi phạm', style: TextStyle(color: _green)),
-                ]),
-              ),
-              PopupMenuItem(
-                value: 'bad',
-                child: Row(children: [
-                  Icon(Icons.block, size: 18, color: _red),
-                  SizedBox(width: 10),
-                  Text('Vi phạm — ẩn bài viết', style: TextStyle(color: _red)),
-                ]),
-              ),
-            ]
-          : [
-              PopupMenuItem(
-                value: 'toggle',
-                child: Row(children: [
-                  Icon(r.postHidden ? Icons.visibility : Icons.visibility_off,
-                      size: 18, color: r.postHidden ? _green : _red),
-                  const SizedBox(width: 10),
-                  Text(r.postHidden ? 'Hiện lại bài viết' : 'Ẩn bài viết',
-                      style: TextStyle(color: r.postHidden ? _green : _red)),
-                ]),
-              ),
-            ],
+      itemBuilder: (_) => const [
+        PopupMenuItem(
+          value: 'ok',
+          child: Row(children: [
+            Icon(Icons.check_box, size: 18, color: _green),
+            SizedBox(width: 10),
+            Text('Không vi phạm', style: TextStyle(color: _green)),
+          ]),
+        ),
+        PopupMenuItem(
+          value: 'bad',
+          child: Row(children: [
+            Icon(Icons.block, size: 18, color: _red),
+            SizedBox(width: 10),
+            Text('Vi phạm — ẩn bài viết', style: TextStyle(color: _red)),
+          ]),
+        ),
+      ],
     );
   }
 }

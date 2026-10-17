@@ -62,6 +62,7 @@ class PostReportService {
   }
 
   /// Tất cả báo cáo bài viết (mới nhất trước).
+  /// Báo cáo đang chờ mà bài viết đã bị xóa được trả về với status = contentRemoved.
   Future<List<PostReportItem>> getReports() async {
     _uid;
     final snap = await _db.collection(reportsCollection).get();
@@ -81,12 +82,19 @@ class PostReportService {
       final postId = m['requestId']?.toString() ?? '';
       final p = posts[postId];
       final studentId = m['studentId']?.toString() ?? '';
+
+      final removed = p == null;
+      final raw = (m['status']?.toString().isNotEmpty ?? false)
+          ? m['status'].toString()
+          : ReportStatus.pending;
+      // Chỉ báo cáo đang chờ mới đổi; báo cáo admin đã chốt thì giữ nguyên.
+      final status =
+          (raw == ReportStatus.pending && removed) ? ReportStatus.contentRemoved : raw;
+
       return PostReportItem(
         id: e.key,
         reason: m['reason']?.toString() ?? '',
-        status: (m['status']?.toString().isNotEmpty ?? false)
-            ? m['status'].toString()
-            : ReportStatus.pending,
+        status: status,
         createdAt: (m['createdAt'] as Timestamp?)?.toDate(),
         postId: postId,
         postExists: p != null,

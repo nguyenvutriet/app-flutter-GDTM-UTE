@@ -9,6 +9,10 @@ class ReportStatus {
   static const String pending = 'pending';
   static const String notViolation = 'not_violation';
   static const String violation = 'violation';
+
+  /// Chỉ dùng để hiển thị: báo cáo đang chờ nhưng nội dung đã bị xóa.
+  /// Không ghi xuống Firestore.
+  static const String contentRemoved = 'content_removed';
 }
 
 /// Một dòng báo cáo đã gộp sẵn nội dung bình luận, tên người báo cáo, tên admin...
@@ -49,9 +53,7 @@ class ReportItem {
   });
 
   bool get effectivelyHidden => commentHidden || postHidden;
-
-  }
-
+}
 
 class CommentReportService {
   static const String reportsCollection = ForumService.commentReportsCollection;
@@ -74,6 +76,7 @@ class CommentReportService {
   }
 
   /// Tất cả báo cáo (mới nhất trước) kèm thông tin bình luận + người dùng.
+  /// Báo cáo đang chờ mà bình luận đã bị xóa được trả về với status = contentRemoved.
   Future<List<ReportItem>> getReports() async {
     _uid;
     final snap = await _db.collection(reportsCollection).get();
@@ -99,12 +102,19 @@ class CommentReportService {
       final commentId = m['commentId']?.toString() ?? '';
       final c = comments[commentId];
       final studentId = m['studentId']?.toString() ?? '';
+
+      final removed = c == null || c['isActive'] == false;
+      final raw = (m['status']?.toString().isNotEmpty ?? false)
+          ? m['status'].toString()
+          : ReportStatus.pending;
+      // Chỉ báo cáo đang chờ mới đổi; báo cáo admin đã chốt thì giữ nguyên.
+      final status =
+          (raw == ReportStatus.pending && removed) ? ReportStatus.contentRemoved : raw;
+
       return ReportItem(
         id: e.key,
         reason: m['reason']?.toString() ?? '',
-        status: (m['status']?.toString().isNotEmpty ?? false)
-            ? m['status'].toString()
-            : ReportStatus.pending,
+        status: status,
         createdAt: (m['createdAt'] as Timestamp?)?.toDate(),
         commentId: commentId,
         commentExists: c != null,
@@ -139,7 +149,7 @@ class CommentReportService {
       throw ForumException('Báo cáo này đã được xử lý');
     }
 
-        // Bình luận thuộc bài viết đang ẩn thì chưa xử lý được
+    // Bình luận thuộc bài viết đang ẩn thì chưa xử lý được
     final cDoc =
         await _db.collection(ForumService.commentsCollection).doc(item.commentId).get();
     final rid = cDoc.data()?['requestId']?.toString() ?? '';
@@ -222,7 +232,7 @@ class CommentReportService {
     return (n == null || n.toString().isEmpty) ? fallback : n.toString();
   }
 
-    /// Trong các bài [ids], trả về id những bài đang bị admin ẩn.
+  /// Trong các bài [ids], trả về id những bài đang bị admin ẩn.
   Future<Set<String>> _loadHiddenPostIds(Set<String> ids) async {
     final out = <String>{};
     final list = ids.where((e) => e.trim().isNotEmpty).toList();

@@ -6,6 +6,7 @@ import 'forum_utils.dart';
 import 'post_link.dart';
 import 'pdf_view.dart';
 import 'reaction_button.dart';
+import 'package:video_player/video_player.dart';
 
 class PostCard extends StatelessWidget {
   final ForumPostDTO post;
@@ -63,37 +64,102 @@ class PostCard extends StatelessWidget {
   }
 
   String _extension(AttachmentDTO file) {
-    final type = file.fileType.toLowerCase().replaceAll('.', '');
-    if (type.isNotEmpty && !type.contains('/')) return type;
-    if (type.contains('pdf')) return 'pdf';
-    final name = file.fileName.split('?').first.toLowerCase();
-    final dot = name.lastIndexOf('.');
-    if (dot >= 0 && dot < name.length - 1) return name.substring(dot + 1);
-    final url = file.fileUrl.split('?').first.toLowerCase();
-    final urlDot = url.lastIndexOf('.');
-    return urlDot >= 0 && urlDot < url.length - 1 ? url.substring(urlDot + 1) : '';
+  // Ưu tiên tên file, ví dụ video.mp4
+  final name = file.fileName
+      .split('?')
+      .first
+      .toLowerCase();
+
+  final nameDot = name.lastIndexOf('.');
+  if (nameDot >= 0 && nameDot < name.length - 1) {
+    return name.substring(nameDot + 1);
   }
 
-  Future<void> _showFilePreview(BuildContext context, AttachmentDTO file) async {
-    final url = file.fileUrl.trim();
-    final uri = Uri.tryParse(url);
-    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đường dẫn tệp không hợp lệ.')),
-      );
-      return;
+  // Kiểm tra fileType nếu tên file không có phần mở rộng
+  final type = file.fileType
+      .toLowerCase()
+      .trim()
+      .replaceAll('.', '');
+
+  if (type.isNotEmpty) {
+    if (type.contains('pdf')) return 'pdf';
+    if (type.contains('mp4')) return 'mp4';
+    if (type.contains('webm')) return 'webm';
+    if (type.contains('quicktime') || type.contains('mov')) {
+      return 'mov';
     }
-    final isPdf = _extension(file) == 'pdf';
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => Dialog(
-        insetPadding: const EdgeInsets.all(20),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900, maxHeight: 720),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
+
+    if (!type.contains('/')) return type;
+  }
+
+  // Kiểm tra URL
+  final url = file.fileUrl
+      .split('?')
+      .first
+      .toLowerCase();
+
+  final urlDot = url.lastIndexOf('.');
+  if (urlDot >= 0 && urlDot < url.length - 1) {
+    return url.substring(urlDot + 1);
+  }
+
+  return '';
+}
+
+  
+Future<void> _showFilePreview(
+  BuildContext context,
+  AttachmentDTO file,
+) async {
+  final url = file.fileUrl.trim();
+  final uri = Uri.tryParse(url);
+
+  if (uri == null ||
+      (uri.scheme != 'http' && uri.scheme != 'https')) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Đường dẫn tệp không hợp lệ.'),
+      ),
+    );
+    return;
+  }
+
+  final extension = _extension(file);
+
+  final isPdf = extension == 'pdf';
+
+  final isVideo = const {
+    'mp4',
+    'm4v',
+    'mov',
+    'webm',
+  }.contains(extension);
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => Dialog(
+      insetPadding: const EdgeInsets.all(20),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: 900,
+          maxHeight: 720,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             ListTile(
-              leading: Icon(isPdf ? Icons.picture_as_pdf : Icons.insert_drive_file_outlined),
-              title: Text(file.fileName, maxLines: 1, overflow: TextOverflow.ellipsis),
+              leading: Icon(
+                isPdf
+                    ? Icons.picture_as_pdf
+                    : isVideo
+                        ? Icons.video_library_outlined
+                        : Icons.insert_drive_file_outlined,
+              ),
+              title: Text(
+                file.fileName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               trailing: IconButton(
                 tooltip: 'Đóng',
                 onPressed: () => Navigator.pop(dialogContext),
@@ -104,13 +170,19 @@ class PostCard extends StatelessWidget {
             Flexible(
               child: isPdf
                   ? PdfView(url: url)
-                  : _UnsupportedFilePreview(onOpen: () => openUrl(context, url)),
+                  : isVideo
+                      ? _VideoFilePreview(url: url)
+                      : _UnsupportedFilePreview(
+                          onOpen: () => openUrl(context, url),
+                        ),
             ),
-          ]),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
 
   /// Có thao tác phụ nào để hiện trong menu ⋯ không
   bool get _hasActions => onToggleHidden != null || (onReport != null && !post.isMine);
@@ -466,6 +538,188 @@ class _UnsupportedFilePreview extends StatelessWidget {
             label: const Text('Mở tệp'),
           ),
         ]),
+      ),
+    );
+  }
+}
+
+
+class _VideoFilePreview extends StatefulWidget {
+  final String url;
+
+  const _VideoFilePreview({required this.url});
+
+  @override
+  State<_VideoFilePreview> createState() =>
+      _VideoFilePreviewState();
+}
+
+class _VideoFilePreviewState extends State<_VideoFilePreview> {
+  late final VideoPlayerController _controller;
+
+  bool _initialized = false;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = VideoPlayerController.networkUrl(
+      Uri.parse(widget.url),
+    );
+
+    _initializeVideo();
+  }
+
+  Future<void> _initializeVideo() async {
+    try {
+      await _controller.initialize();
+
+      if (!mounted) return;
+
+      setState(() {
+        _initialized = true;
+      });
+    } catch (e) {
+      debugPrint('Không thể tải video đính kèm: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _hasError = true;
+      });
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
+
+    final seconds = duration.inSeconds
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
+
+    final hours = duration.inHours;
+
+    if (hours > 0) {
+      return '$hours:$minutes:$seconds';
+    }
+
+    return '$minutes:$seconds';
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_hasError) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 52,
+                color: Colors.redAccent,
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Không thể phát video này.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 15),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'Hãy kiểm tra đường dẫn, quyền truy cập '
+                'hoặc định dạng video.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.black54,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (!_initialized) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 12),
+            Text('Đang tải video...'),
+          ],
+        ),
+      );
+    }
+
+    final duration = _controller.value.duration;
+    final position = _controller.value.position;
+
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AspectRatio(
+              aspectRatio: _controller.value.aspectRatio > 0
+                  ? _controller.value.aspectRatio
+                  : 16 / 9,
+              child: VideoPlayer(_controller),
+            ),
+            const SizedBox(height: 8),
+            VideoProgressIndicator(
+              _controller,
+              allowScrubbing: true,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+            ),
+            Row(
+              children: [
+                IconButton(
+                  tooltip: _controller.value.isPlaying
+                      ? 'Tạm dừng'
+                      : 'Phát video',
+                  icon: Icon(
+                    _controller.value.isPlaying
+                        ? Icons.pause_circle_filled
+                        : Icons.play_circle_fill,
+                    size: 36,
+                  ),
+                  onPressed: () async {
+                    if (_controller.value.isPlaying) {
+                      await _controller.pause();
+                    } else {
+                      await _controller.play();
+                    }
+
+                    if (mounted) setState(() {});
+                  },
+                ),
+                Expanded(
+                  child: Text(
+                    '${_formatDuration(position)} / '
+                    '${_formatDuration(duration)}',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

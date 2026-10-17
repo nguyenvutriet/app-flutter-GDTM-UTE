@@ -50,6 +50,7 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
   bool _submitting = false;
   String? _progressText;
   String? _error;
+  String? _attachmentError;
 
   @override
   void initState() {
@@ -123,7 +124,7 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
         }
         _files.add(f);
       }
-      _error = problems.isEmpty ? null : problems.join('\n');
+      _attachmentError = problems.isEmpty ? null : problems.join('\n');
     });
   }
 
@@ -149,6 +150,7 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
       _privacy = null;
       _files.clear();
       _error = null;
+      _attachmentError = null;
       _progressText = null;
     });
   }
@@ -268,8 +270,9 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
                 )
               else
                 Form(
-                  key: _formKey,
-                  child: Column(
+                    key: _formKey,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       if (wide)
@@ -364,12 +367,72 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
             style: TextStyle(fontSize: 12, color: Colors.black54),
           ),
           const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: _submitting ? null : _pickFiles,
-            icon: const Icon(Icons.attach_file),
-            label: const Text('Chọn tệp'),
-          ),
-          if (_files.isNotEmpty) ...[
+
+            // Nút chọn tệp — giữ nguyên nút này
+            OutlinedButton.icon(
+              onPressed: _submitting ? null : _pickFiles,
+              icon: const Icon(Icons.attach_file),
+              label: const Text('Chọn tệp'),
+            ),
+
+            // Thông báo lỗi hiển thị ngay dưới nút chọn tệp
+            
+            if (_attachmentError != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFDECEA),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: const Color(0xFFF5C2C0),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Color(0xFFB3261E),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _attachmentError!,
+                        style: const TextStyle(
+                          color: Color(0xFFB3261E),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _attachmentError = null;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(20),
+                      child: const Padding(
+                        padding: EdgeInsets.all(2),
+                        child: Icon(
+                          Icons.close,
+                          size: 18,
+                          color: Color(0xFFB3261E),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+
+            if (_files.isNotEmpty) ...[
             const SizedBox(height: 12),
             for (var i = 0; i < _files.length; i++)
               Container(
