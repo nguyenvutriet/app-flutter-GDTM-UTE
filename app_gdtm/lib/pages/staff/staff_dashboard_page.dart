@@ -4,6 +4,7 @@ import 'staff_list_page.dart';
 
 import '../../services/RequestService.dart';
 import '../../models/Request.dart';
+import 'feedback_detail_page.dart';
 
 class StaffDashboardPage extends StatefulWidget {
   final String role;
@@ -49,6 +50,20 @@ class _StaffDashboardPageState
     _loadDashboard();
   }
 
+  void _openRecentRequest(Request request) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FeedbackDetailPage(
+          request: request,
+          role: widget.role,
+          departmentId: widget.departmentId,
+          staffUserId: widget.staffUserId,
+        ),
+      ),
+    );
+  }
+  
   // ============================================================
   // LOAD
   // ============================================================
@@ -102,6 +117,8 @@ class _StaffDashboardPageState
   void _openStaffList({
     String? status,
   }) {
+
+    return ;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -668,11 +685,7 @@ class _StaffDashboardPageState
                   ),
 
                   onTap: () {
-                    _openStaffList(
-                      status:
-                          request
-                              .currentStatus,
-                    );
+                    _openRecentRequest(request);
                   },
                 ),
               );

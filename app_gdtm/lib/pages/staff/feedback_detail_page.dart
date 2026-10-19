@@ -1325,6 +1325,18 @@ Future<void> _openForumPost() async {
   // ============================================================
 
   Future<void> _openMessages() async {
+      // Chỉ cho phép chat khi góp ý đang được xử lý.
+    if (_request.currentStatus != 'APPROVED') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Chỉ được mở hộp thoại chat khi góp ý ở trạng thái Đang xử lý.',
+          ),
+        ),
+      );
+      return;
+    }
+
     await showDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -1574,121 +1586,145 @@ Widget _buildConversationSection() {
   // FORWARD DIALOG
   // ============================================================
 
-  Future<void> _showForwardDialog() async {
-    if (!_canOperateRequest) {
-      _showMessage(
-        'Phòng ban hiện tại không có quyền chuyển góp ý này.',
-        isError: true,
-      );
+  
+Future<void> _showForwardDialog() async {
+  if (!_canOperateRequest) {
+    _showMessage(
+      'Phòng ban hiện tại không có quyền chuyển góp ý này.',
+      isError: true,
+    );
+    return;
+  }
 
-      return;
-    }
+  final available = _forwardDepartments
+      .where((d) => d.id != _request.departmentId)
+      .toList();
 
-    final available = _forwardDepartments
-        .where((d) => d.id != _request.departmentId)
-        .toList();
+  if (available.isEmpty) {
+    _showMessage(
+      'Chưa có phòng ban khác để chuyển tiếp.',
+      isError: true,
+    );
+    return;
+  }
 
-    if (available.isEmpty) {
-      _showMessage('Chưa có phòng ban khác để chuyển tiếp.', isError: true);
+  String? selectedId;
 
-      return;
-    }
+  final result = await showDialog<String>(
+    context: context,
+    barrierDismissible: true,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 24,
+        ),
 
-    String? selectedId;
-
-    final noteController = TextEditingController();
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.forward_outlined),
-              SizedBox(width: 8),
-              Text('Chuyển tiếp phản hồi'),
-            ],
-          ),
-
-          content: SizedBox(
-            width: 520,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  value: selectedId,
-                  isExpanded: true,
-
-                  decoration: const InputDecoration(
-                    labelText: 'Phòng ban nhận',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.business_outlined),
-                  ),
-
-                  items: available.map((department) {
-                    return DropdownMenuItem<String>(
-                      value: department.id,
-                      child: Text(department.name),
-                    );
-                  }).toList(),
-
-                  onChanged: (value) {
-                    setDialogState(() {
-                      selectedId = value;
-                    });
-                  },
-                ),
-
-                const SizedBox(height: 12),
-
-                TextField(
-                  controller: noteController,
-                  maxLines: 3,
-
-                  decoration: const InputDecoration(
-                    labelText: 'Ghi chú chuyển',
-                    hintText: 'Nhập ghi chú nếu cần...',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Hủy'),
-            ),
-
-            FilledButton.icon(
-              onPressed: selectedId == null
-                  ? null
-                  : () => Navigator.pop(dialogContext, selectedId),
-
-              icon: const Icon(Icons.forward_outlined),
-
-              label: const Text('Chuyển tiếp'),
+        // Tiêu đề thích ứng với màn hình hẹp.
+        title: const Row(
+          children: [
+            Icon(Icons.forward_outlined),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Chuyển tiếp phản hồi',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
+
+        // Không cố định chiều rộng 520px.
+        content: SizedBox(
+          width: MediaQuery.sizeOf(dialogContext).width * 0.8,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: selectedId,
+                isExpanded: true,
+                menuMaxHeight: 250,
+                decoration: const InputDecoration(
+                  labelText: 'Phòng ban nhận',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.business_outlined),
+                ),
+                items: available.map((department) {
+                  return DropdownMenuItem<String>(
+                    value: department.id,
+                    child: Text(
+                      department.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setDialogState(() {
+                    selectedId = value;
+                  });
+                },
+              ),
+
+              const SizedBox(height: 12),
+
+              TextField(
+                controller: _forwardNoteController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Ghi chú chuyển',
+                  hintText: 'Nhập ghi chú nếu cần...',
+                  border: OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Cho phép các nút xuống dòng nếu không đủ chiều rộng.
+        actionsOverflowDirection: VerticalDirection.down,
+        actionsOverflowButtonSpacing: 8,
+
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop<String>(null);
+            },
+            child: const Text('Hủy'),
+          ),
+          FilledButton.icon(
+            onPressed: selectedId == null
+                ? null
+                : () => Navigator.pop(dialogContext, selectedId),
+            icon: const Icon(Icons.forward_outlined),
+            label: const Text('Chuyển tiếp'),
+          ),
+        ],
       ),
-    );
+    ),
+  );
 
-    final selectedNote = noteController.text.trim();
-
-    noteController.dispose();
-
-    if (result == null) return;
-
-    setState(() {
-      _selectedDepartmentId = result;
-
-      _forwardNoteController.text = selectedNote;
-    });
-
-    await _forwardRequest();
+  // Người dùng nhấn Hủy hoặc đóng hộp thoại.
+  if (result == null) {
+    _forwardNoteController.clear();
+    return;
   }
+
+  final selectedNote = _forwardNoteController.text.trim();
+
+  if (!mounted) return;
+
+  setState(() {
+    _selectedDepartmentId = result;
+  });
+
+  _forwardNoteController.text = selectedNote;
+
+  await _forwardRequest();
+}
+
 
   // ============================================================
   // CATEGORY

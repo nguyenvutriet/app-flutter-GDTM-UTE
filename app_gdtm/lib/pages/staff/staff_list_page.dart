@@ -101,7 +101,7 @@ class _StaffListPageState extends State<StaffListPage> {
 
     'APPROVED',
 
-    //'FORWARDING',
+    'FORWARDING',
 
     'RESOLVED',
 
@@ -216,12 +216,11 @@ class _StaffListPageState extends State<StaffListPage> {
 
       _applyFilters();
     } catch (e) {
-      if (!mounted) return;
+        debugPrint('Lỗi tải danh mục góp ý: $e');
 
-      setState(() {
-        _error = e.toString();
-      });
-    }
+        // Không làm hỏng trang danh sách nếu tải danh mục thất bại.
+        // Danh sách góp ý vẫn có thể hiển thị bình thường.
+      }
   }
 
   List<String> get _categoryOptions {
@@ -528,9 +527,9 @@ class _StaffListPageState extends State<StaffListPage> {
 
         return 'Đang chờ tiếp nhận';
 
-      //case 'FORWARDING':
+      case 'FORWARDING':
 
-        //return 'Đã được chuyển tiếp';
+        return 'Đã được chuyển tiếp';
 
       case 'APPROVED':
 
